@@ -1,0 +1,23 @@
+<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>管理員登入</title>
+<link rel="stylesheet" href="style.css"></head>
+<body style="display:grid;place-items:center;min-height:100vh">
+<div class="card" style="width:min(360px,92vw)">
+<h2 style="margin:0 0 8px">AR Studio 管理員登入</h2>
+<input type="email" id="em" placeholder="電郵" autocomplete="username">
+<input type="password" id="pw" placeholder="密碼" autocomplete="current-password">
+<button class="pri" id="go" style="width:100%;margin-top:8px">登入</button>
+<div class="msg err" id="m"></div></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script>
+const sb=supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_KEY);
+sb.auth.getSession().then(({data})=>{if(data.session)location.replace('admin.html')});
+async function login(){
+  const m=document.getElementById('m');m.textContent='';
+  const {error}=await sb.auth.signInWithPassword({email:em.value.trim(),password:pw.value});
+  if(error){m.textContent='登入失敗:電郵或密碼不正確';return;}
+  location.replace('admin.html');
+}
+go.onclick=login;pw.onkeydown=e=>{if(e.key==='Enter')login()};
+</script></body></html>

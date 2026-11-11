@@ -1,0 +1,143 @@
+<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>AR Studio 管理</title>
+<link rel="stylesheet" href="style.css">
+<style>
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid var(--bd);font-weight:700}
+main{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(300px,1fr);gap:16px;padding:16px;max-width:1100px;margin:0 auto}
+@media(max-width:800px){main{grid-template-columns:1fr}}
+model-viewer{width:100%;height:50vh;min-height:300px;border-radius:10px;display:none}
+#drop{border:2px dashed var(--bd);border-radius:12px;padding:34px 16px;text-align:center;color:var(--mut);cursor:pointer}
+.row{display:flex;align-items:center;gap:10px;margin:8px 0}.row label{width:90px;flex:none;color:var(--mut);font-size:13px}
+.row input[type=range]{flex:1;min-width:0;accent-color:var(--ac)}.row output{width:44px;text-align:right;font-size:13px}
+.sw{width:28px;height:28px;border-radius:50%;padding:0;border:2px solid var(--bd)}.sw.on{border-color:var(--ac);box-shadow:0 0 0 2px var(--ac)}
+#qr{width:200px;height:200px;max-width:100%;background:#fff;border-radius:8px}
+.item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--bd)}
+.item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.item button{padding:5px 10px;font-size:13px}
+</style></head><body>
+<header><div>AR Studio 管理</div><button id="out">登出</button></header>
+<main>
+<section style="display:grid;gap:16px;align-content:start">
+ <div class="card">
+  <div id="drop">點擊選擇 .glb 檔案(約 15 MB 內)</div>
+  <input type="file" id="file" accept=".glb" hidden>
+  <model-viewer id="mv" camera-controls touch-action="pan-y" interaction-prompt="none"></model-viewer>
+  <div class="msg" id="fname"></div>
+ </div>
+ <div class="card"><b>已上載的模型</b><div id="list" class="msg">載入中…</div></div>
+</section>
+<section style="display:grid;gap:16px;align-content:start">
+ <div class="card"><b>編輯</b>
+  <div class="row"><label>大小</label><input type="range" id="s" min="10" max="300"><output id="so"></output></div>
+  <div class="row"><label>旋轉</label><input type="range" id="r" min="0" max="359"><output id="ro"></output></div>
+  <div class="row"><label>亮度</label><input type="range" id="e" min="2" max="30"><output id="eo"></output></div>
+  <div class="row"><label>陰影</label><input type="range" id="h" min="0" max="20"><output id="ho"></output></div>
+  <div class="row"><label>背景</label><div id="bgs" class="row" style="margin:0"></div></div>
+  <div class="row"><label>自動旋轉</label><input type="checkbox" id="a"></div>
+  <div class="row"><label>AR 固定尺寸</label><input type="checkbox" id="p"></div>
+ </div>
+ <div class="card" style="text-align:center"><b>儲存並生成 QR Code</b><br>
+  <button class="pri" id="save" disabled style="margin-top:8px">儲存並生成 QR</button>
+  <div class="msg" id="gm"></div>
+  <div id="qrw" style="display:none"><canvas id="qr" width="200" height="200"></canvas>
+   <div class="msg" id="lk" style="word-break:break-all"></div>
+   <button id="dl">下載 QR</button> <button id="cp">複製連結</button> <button id="op">打開客戶頁</button></div>
+ </div>
+</section></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="config.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const sb=supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_KEY), B=CFG.BUCKET;
+const pub=k=>`${CFG.SUPABASE_URL}/storage/v1/object/public/${B}/${k}`;
+const BGS=['#f4f4f2','#16181d','#dbe7ff','#ffe6d2','#d9f2e3'];
+const DEF={s:100,r:0,e:10,h:10,a:0,b:0,p:0};
+let st={...DEF},cur=null,pending=null,localUrl=null;
+const mv=$('mv');
+
+sb.auth.getSession().then(({data})=>{if(!data.session)location.replace('index.html');else loadList()});
+$('out').onclick=async()=>{await sb.auth.signOut();location.replace('index.html')};
+
+BGS.forEach((c,i)=>{const b=document.createElement('button');b.className='sw';b.style.background=c;b.onclick=()=>{st.b=i;sync()};$('bgs').appendChild(b)});
+['s','r','e','h'].forEach(k=>$(k).oninput=()=>{st[k]=+$(k).value;sync()});
+$('a').onchange=()=>{st.a=$('a').checked?1:0;sync()};
+$('p').onchange=()=>{st.p=$('p').checked?1:0;sync()};
+function setUI(){['s','r','e','h'].forEach(k=>$(k).value=st[k]);$('a').checked=!!st.a;$('p').checked=!!st.p}
+function sync(){
+  $('so').textContent=st.s+'%';$('ro').textContent=st.r+'°';$('eo').textContent=(st.e/10).toFixed(1);$('ho').textContent=(st.h/10).toFixed(1);
+  [...$('bgs').children].forEach((b,i)=>b.classList.toggle('on',i===st.b));
+  const sc=st.s/100;
+  mv.setAttribute('scale',`${sc} ${sc} ${sc}`);mv.setAttribute('orientation',`0deg ${st.r}deg 0deg`);
+  mv.setAttribute('exposure',st.e/10);mv.setAttribute('shadow-intensity',st.h/10);
+  mv.style.backgroundColor=BGS[st.b];
+  st.a?mv.setAttribute('auto-rotate',''):mv.removeAttribute('auto-rotate');
+}
+sync();
+
+$('drop').onclick=()=>$('file').click();
+$('file').onchange=()=>{
+  const f=$('file').files[0];if(!f)return;
+  if(!/\.glb$/i.test(f.name)){$('fname').textContent='請選擇 .glb 檔案';return}
+  if(f.size>50*1024*1024){$('fname').textContent='檔案太大(上限 50 MB,建議 15 MB 內)';return}
+  pending=f;cur=null;st={...DEF};setUI();
+  if(localUrl)URL.revokeObjectURL(localUrl);localUrl=URL.createObjectURL(f);
+  mv.src=localUrl;mv.style.display='block';$('drop').style.display='none';
+  $('fname').textContent=f.name+'(未儲存)';$('save').disabled=false;$('qrw').style.display='none';sync();
+};
+
+function viewLink(){return new URL('view.html?m='+encodeURIComponent(cur),location.href).href}
+function drawQR(){
+  const u=viewLink(),q=qrcode(0,'M');q.addData(u);q.make();
+  const n=q.getModuleCount(),px=Math.floor(800/(n+8)),c=$('qr');c.width=c.height=px*(n+8);
+  const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.fillStyle='#000';
+  for(let y=0;y<n;y++)for(let x=0;x<n;x++)if(q.isDark(y,x))g.fillRect((x+4)*px,(y+4)*px,px,px);
+  $('lk').textContent=u;$('qrw').style.display='block';
+}
+$('save').onclick=async()=>{
+  const gm=$('gm');gm.className='msg';gm.textContent='儲存中…';$('save').disabled=true;
+  try{
+    if(pending){
+      const safe=pending.name.replace(/\.glb$/i,'').replace(/[^A-Za-z0-9_-]/g,'_').slice(0,40)||'model';
+      const key=Math.random().toString(36).slice(2,8)+'-'+safe+'.glb';
+      const {error}=await sb.storage.from(B).upload(key,pending,{contentType:'model/gltf-binary'});
+      if(error)throw error;cur=key;pending=null;
+    }
+    const {error:e2}=await sb.storage.from(B).upload(cur+'.json',new Blob([JSON.stringify(st)],{type:'application/json'}),{upsert:true,cacheControl:'0',contentType:'application/json'});
+    if(e2)throw e2;
+    gm.textContent='已儲存!用手機掃描 QR 即可。';drawQR();loadList();
+  }catch(e){gm.className='msg err';gm.textContent='失敗:'+(e.message||e)}
+  $('save').disabled=false;
+};
+$('dl').onclick=()=>{const a=document.createElement('a');a.href=$('qr').toDataURL('image/png');a.download='ar-qr.png';a.click()};
+$('cp').onclick=async()=>{try{await navigator.clipboard.writeText(viewLink());$('gm').textContent='連結已複製'}catch(e){}};
+$('op').onclick=()=>window.open(viewLink(),'_blank');
+
+async function loadList(){
+  const {data,error}=await sb.storage.from(B).list('',{limit:100,sortBy:{column:'created_at',order:'desc'}});
+  const L=$('list');
+  if(error){L.className='msg err';L.textContent='讀取失敗:'+error.message;return}
+  const rows=(data||[]).filter(f=>f.name.endsWith('.glb'));
+  L.className='';L.innerHTML=rows.length?'':'<div class="msg">未有模型</div>';
+  rows.forEach(f=>{
+    const d=document.createElement('div');d.className='item';
+    const s=document.createElement('span');s.textContent=f.name.replace(/^[a-z0-9]{1,6}-/,'');
+    const be=document.createElement('button');be.textContent='編輯 / QR';be.onclick=()=>edit(f.name);
+    const bd=document.createElement('button');bd.textContent='刪除';bd.onclick=()=>del(f.name);
+    d.append(s,be,bd);L.appendChild(d);
+  });
+}
+async function edit(key){
+  pending=null;cur=key;st={...DEF};
+  try{const r=await fetch(pub(key+'.json')+'?t='+Date.now());if(r.ok)st={...DEF,...await r.json()}}catch(e){}
+  setUI();mv.src=pub(key);mv.style.display='block';$('drop').style.display='none';
+  $('fname').textContent=key.replace(/^[a-z0-9]{1,6}-/,'');$('save').disabled=false;sync();drawQR();window.scrollTo(0,0);
+}
+async function del(key){
+  if(!confirm('確定刪除?已印出的 QR 會失效。'))return;
+  await sb.storage.from(B).remove([key,key+'.json']);
+  if(cur===key){cur=null;mv.style.display='none';$('qrw').style.display='none';$('drop').style.display='block';$('save').disabled=true}
+  loadList();
+}
+</script></body></html>
