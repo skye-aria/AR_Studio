@@ -13,7 +13,7 @@ model-viewer{position:fixed;inset:0;width:100%;height:100%;z-index:1;--poster-co
 #shot img{max-width:92%;max-height:70%;border-radius:10px}
 </style></head><body>
 <video id="vid" playsinline muted autoplay></video>
-<model-viewer id="mv" camera-controls touch-action="pan-y" ar ar-modes="scene-viewer webxr quick-look" interaction-prompt="auto">
+<model-viewer id="mv" camera-controls touch-action="pan-y" ar ar-modes="webxr scene-viewer quick-look" interaction-prompt="auto">
   <button slot="ar-button" id="arbtn" style="display:none"></button>
 </model-viewer>
 <div id="msg">載入模型中…</div>
