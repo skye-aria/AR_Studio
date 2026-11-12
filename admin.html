@@ -24,7 +24,7 @@ model-viewer{width:100%;height:50vh;min-height:300px;border-radius:10px;display:
   <model-viewer id="mv" camera-controls touch-action="pan-y" interaction-prompt="none"></model-viewer>
   <div class="msg" id="fname"></div>
  </div>
- <div class="card"><b>已上載的模型</b><div id="list" class="msg">載入中…</div></div>
+ <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>已上載的模型</b><button class="pri" id="nw" style="padding:6px 12px">＋ 上載新模型</button></div><div class="msg" id="tot"></div><div id="list" class="msg">載入中…</div></div>
 </section>
 <section style="display:grid;gap:16px;align-content:start">
  <div class="card"><b>編輯</b>
@@ -54,7 +54,8 @@ const sb=supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_KEY), B=CFG.BUCKET;
 const pub=k=>`${CFG.SUPABASE_URL}/storage/v1/object/public/${B}/${k}`;
 const BGS=['#f4f4f2','#16181d','#dbe7ff','#ffe6d2','#d9f2e3'];
 const DEF={s:100,r:0,e:10,h:10,a:0,b:0,p:0};
-let st={...DEF},cur=null,pending=null,localUrl=null;
+let st={...DEF},cur=null,pending=null,localUrl=null,sizes={};
+const fmt=n=>n>=1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB';
 const mv=$('mv');
 
 sb.auth.getSession().then(({data})=>{if(!data.session)location.replace('index.html');else loadList()});
@@ -77,14 +78,20 @@ function sync(){
 sync();
 
 $('drop').onclick=()=>$('file').click();
+function newModel(){
+  pending=null;cur=null;st={...DEF};setUI();sync();
+  $('file').value='';mv.style.display='none';mv.removeAttribute('src');$('drop').style.display='block';
+  $('fname').textContent='';$('save').disabled=true;$('qrw').style.display='none';$('gm').textContent='';
+}
+$('nw').onclick=()=>{newModel();window.scrollTo(0,0)};
 $('file').onchange=()=>{
   const f=$('file').files[0];if(!f)return;
   if(!/\.glb$/i.test(f.name)){$('fname').textContent='請選擇 .glb 檔案';return}
   if(f.size>50*1024*1024){$('fname').textContent='檔案太大(上限 50 MB,建議 15 MB 內)';return}
-  pending=f;cur=null;st={...DEF};setUI();
+  pending=f;cur=null;st={...DEF};setUI();$('file').value='';
   if(localUrl)URL.revokeObjectURL(localUrl);localUrl=URL.createObjectURL(f);
   mv.src=localUrl;mv.style.display='block';$('drop').style.display='none';
-  $('fname').textContent=f.name+'(未儲存)';$('save').disabled=false;$('qrw').style.display='none';sync();
+  $('fname').textContent=f.name+'('+fmt(f.size)+',未儲存)';$('save').disabled=false;$('qrw').style.display='none';sync();
 };
 
 function viewLink(){return new URL('view.html?m='+encodeURIComponent(cur),location.href).href}
@@ -106,7 +113,7 @@ $('save').onclick=async()=>{
     }
     const {error:e2}=await sb.storage.from(B).upload(cur+'.json',new Blob([JSON.stringify(st)],{type:'application/json'}),{upsert:true,cacheControl:'0',contentType:'application/json'});
     if(e2)throw e2;
-    gm.textContent='已儲存!用手機掃描 QR 即可。';drawQR();loadList();
+    gm.textContent='已儲存!用手機掃描 QR 即可。想上載另一個,按右上「＋ 上載新模型」。';drawQR();loadList();
   }catch(e){gm.className='msg err';gm.textContent='失敗:'+(e.message||e)}
   $('save').disabled=false;
 };
@@ -119,10 +126,12 @@ async function loadList(){
   const L=$('list');
   if(error){L.className='msg err';L.textContent='讀取失敗:'+error.message;return}
   const rows=(data||[]).filter(f=>f.name.endsWith('.glb'));
+  sizes={};let sum=0;rows.forEach(f=>{const z=(f.metadata&&f.metadata.size)||0;sizes[f.name]=z;sum+=z});
+  $('tot').textContent=rows.length?`共 ${rows.length} 個模型,合計約 ${fmt(sum)}`:'';
   L.className='';L.innerHTML=rows.length?'':'<div class="msg">未有模型</div>';
   rows.forEach(f=>{
     const d=document.createElement('div');d.className='item';
-    const s=document.createElement('span');s.textContent=f.name.replace(/^[a-z0-9]{1,6}-/,'');
+    const s=document.createElement('span');s.textContent=f.name.replace(/^[a-z0-9]{1,6}-/,'')+(sizes[f.name]?'('+fmt(sizes[f.name])+')':'');
     const be=document.createElement('button');be.textContent='編輯 / QR';be.onclick=()=>edit(f.name);
     const bd=document.createElement('button');bd.textContent='刪除';bd.onclick=()=>del(f.name);
     d.append(s,be,bd);L.appendChild(d);
@@ -132,12 +141,12 @@ async function edit(key){
   pending=null;cur=key;st={...DEF};
   try{const r=await fetch(pub(key+'.json')+'?t='+Date.now());if(r.ok)st={...DEF,...await r.json()}}catch(e){}
   setUI();mv.src=pub(key);mv.style.display='block';$('drop').style.display='none';
-  $('fname').textContent=key.replace(/^[a-z0-9]{1,6}-/,'');$('save').disabled=false;sync();drawQR();window.scrollTo(0,0);
+  $('fname').textContent=key.replace(/^[a-z0-9]{1,6}-/,'')+(sizes[key]?'('+fmt(sizes[key])+')':'');$('save').disabled=false;sync();drawQR();window.scrollTo(0,0);
 }
 async function del(key){
   if(!confirm('確定刪除?已印出的 QR 會失效。'))return;
   await sb.storage.from(B).remove([key,key+'.json']);
-  if(cur===key){cur=null;mv.style.display='none';$('qrw').style.display='none';$('drop').style.display='block';$('save').disabled=true}
+  if(cur===key)newModel();
   loadList();
 }
 </script></body></html>

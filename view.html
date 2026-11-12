@@ -13,13 +13,14 @@ model-viewer{position:fixed;inset:0;width:100%;height:100%;z-index:1;--poster-co
 #shot img{max-width:92%;max-height:70%;border-radius:10px}
 </style></head><body>
 <video id="vid" playsinline muted autoplay></video>
-<model-viewer id="mv" camera-controls touch-action="pan-y" ar ar-modes="webxr scene-viewer quick-look" interaction-prompt="auto">
+<model-viewer id="mv" camera-controls touch-action="pan-y" ar ar-modes="scene-viewer webxr quick-look" interaction-prompt="auto">
   <button slot="ar-button" id="arbtn" style="display:none"></button>
 </model-viewer>
 <div id="msg">載入模型中…</div>
+<div id="sz" style="display:none;position:fixed;left:16px;right:16px;bottom:calc(86px + env(safe-area-inset-bottom));z-index:3;align-items:center;gap:10px;background:#0008;color:#fff;border-radius:999px;padding:8px 16px"><span>大小</span><input type="range" id="zs" min="3" max="150" value="30" style="flex:1;accent-color:#fff"></div>
 <div class="bar">
-  <button id="ar">AR 擺放(原生)</button>
-  <button id="cam" class="alt">鏡頭拍照模式</button>
+  <button id="cam">鏡頭拍照模式</button>
+  <button id="ar" class="alt">AR 地面擺放</button>
   <button id="snap" style="display:none">📸 拍照</button>
   <button id="stop" class="alt" style="display:none">關閉鏡頭</button>
 </div>
@@ -35,7 +36,8 @@ const pub=k=>`${CFG.SUPABASE_URL}/storage/v1/object/public/${CFG.BUCKET}/${k}`;
 const mv=$('mv');let st={s:100,r:0,e:10,h:10,a:0,b:0,p:0},stream=null;
 function apply(){
   const sc=st.s/100;
-  mv.setAttribute('scale',`${sc} ${sc} ${sc}`);mv.setAttribute('orientation',`0deg ${st.r}deg 0deg`);
+  const f=stream?(+$('zs').value/100):1,k2=sc*f;
+  mv.setAttribute('scale',`${k2} ${k2} ${k2}`);mv.setAttribute('orientation',`0deg ${st.r}deg 0deg`);
   mv.setAttribute('exposure',st.e/10);mv.setAttribute('shadow-intensity',st.h/10);
   mv.setAttribute('ar-scale',st.p?'fixed':'auto');
   mv.style.backgroundColor=stream?'transparent':BGS[st.b];
@@ -48,22 +50,23 @@ function apply(){
 })();
 mv.addEventListener('load',()=>{$('msg').textContent='';if(!mv.canActivateAR)$('ar').style.display='none'});
 mv.addEventListener('error',()=>{$('msg').textContent='模型載入失敗'});
-$('ar').onclick=()=>mv.activateAR();
+$('ar').onclick=()=>{mv.activateAR();$('msg').textContent='請慢慢移動手機掃描地面,出現圓點後點擊放置';setTimeout(()=>{$('msg').textContent=''},6000)};
 
 $('cam').onclick=async()=>{
   try{
     stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
     $('vid').srcObject=stream;$('vid').style.display='block';apply();
-    $('cam').style.display=$('ar').style.display='none';$('snap').style.display=$('stop').style.display='inline-block';
-    $('msg').textContent='拖動旋轉、雙指縮放模型,再按拍照';
+    $('cam').style.display=$('ar').style.display='none';$('snap').style.display=$('stop').style.display='inline-block';$('sz').style.display='flex';
+    $('msg').textContent='用下方滑桿調整大小,拖動可旋轉,再按拍照';
   }catch(e){$('msg').textContent='未能開啟鏡頭,請允許鏡頭權限(需用 https 開啟)'}
 };
 function stopCam(){
   if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;$('vid').style.display='none';apply();
   $('cam').style.display='inline-block';$('ar').style.display=mv.canActivateAR?'inline-block':'none';
-  $('snap').style.display=$('stop').style.display='none';$('msg').textContent='';
+  $('snap').style.display=$('stop').style.display='none';$('sz').style.display='none';$('msg').textContent='';
 }
 $('stop').onclick=stopCam;
+$('zs').oninput=apply;
 $('snap').onclick=async()=>{
   const v=$('vid'),dpr=window.devicePixelRatio||1,W=Math.round(innerWidth*dpr),H=Math.round(innerHeight*dpr);
   const c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
