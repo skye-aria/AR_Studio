@@ -98,7 +98,7 @@ sync();
 $('drop').onclick=()=>$('file').click();
 function newModel(){
   pending=null;cur=null;st=newSt();sel=null;setUI();sync();renderFx();drawSps();
-  $('file').value='';mv.style.display='none';mv.removeAttribute('src');$('drop').style.display='block';
+  $('file').value='';mv.style.display='none';mv.removeAttribute('src');mv.src=null;$('drop').style.display='block';
   $('fname').textContent='';$('save').disabled=true;$('qrw').style.display='none';$('gm').textContent='';
 }
 $('nw').onclick=()=>{newModel();window.scrollTo(0,0)};
@@ -160,7 +160,7 @@ $('fl').onchange=()=>{const s=cs();if(s){s.l=$('fl').value;FX.touch(s);fxMsg(s.l
 $('fpl').onclick=()=>{const s=cs();if(!s)return;const t=mv.getCameraTarget(),sc=st.s/100;s.x=+(t.x/sc).toFixed(4);s.y=+(t.y/sc).toFixed(4);s.z=+(t.z/sc).toFixed(4)};
 $('fdel').onclick=()=>{st.sp=st.sp.filter(s=>s.id!==sel);sel=null;renderFx();drawSps()};
 function addSprite(f){
-  if(!mv.getAttribute('src')){fxMsg('請先上載或選擇一個模型',1);return}
+  if(!mv.src){fxMsg('請先上載或選擇一個模型',1);return}
   const t=mv.getCameraTarget(),sc=st.s/100,id=Math.random().toString(36).slice(2,6);
   st.sp.push({id,f,x:+(t.x/sc).toFixed(4),y:+(t.y/sc).toFixed(4),z:+(t.z/sc).toFixed(4),w:140,o:100,r:0,an:'none',l:'f'});
   sel=id;renderFx();drawSps();fxMsg('已加入。用手指在上方預覽直接拖動圖片,即可移到想要的位置');
@@ -169,7 +169,19 @@ async function loadLib(){
   const {data}=await sb.storage.from(B).list('fx',{limit:100,sortBy:{column:'created_at',order:'desc'}});
   const L=$('lib');L.innerHTML='';
   (data||[]).filter(f=>f.name&&!f.name.startsWith('.')).forEach(f=>{
-    const im=document.createElement('img');im.src=pub('fx/'+f.name);im.className='thumb';im.title='點擊加入模型';im.onclick=()=>addSprite(f.name);L.appendChild(im);
+    const w=document.createElement('div');w.style.cssText='position:relative;flex:none';
+    const im=document.createElement('img');im.src=pub('fx/'+f.name);im.className='thumb';im.title='點擊加入模型';im.onclick=()=>addSprite(f.name);
+    const x=document.createElement('button');x.textContent='✕';x.title='刪除這張圖片';
+    x.style.cssText='position:absolute;top:-6px;right:-6px;width:22px;height:22px;padding:0;border-radius:50%;font-size:12px;line-height:1';
+    x.onclick=async e=>{
+      e.stopPropagation();
+      if(!confirm('刪除這張圖片?已使用它的模型,特效會消失。'))return;
+      const {error}=await sb.storage.from(B).remove(['fx/'+f.name]);
+      if(error){fxMsg('刪除失敗:'+error.message,1);return}
+      if(st.sp.some(s=>s.f===f.name)){st.sp=st.sp.filter(s=>s.f!==f.name);sel=null;renderFx();drawSps();fxMsg('已刪除。這個模型上用到它的特效已移除,記得按「儲存並生成 QR」')}else fxMsg('已刪除');
+      loadLib();
+    };
+    w.append(im,x);L.appendChild(w);
   });
 }
 $('fxup').onclick=()=>$('fxfile').click();
