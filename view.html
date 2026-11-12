@@ -28,6 +28,7 @@ model-viewer{position:fixed;inset:0;width:100%;height:100%;z-index:1;--poster-co
   <div><a id="sv" download="ar-photo.jpg" style="color:#fff">下載圖片</a> ・ <button id="cl" class="alt">返回</button></div></div>
 <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
 <script src="config.js"></script>
+<script src="fx.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 const BGS=['#f4f4f2','#16181d','#dbe7ff','#ffe6d2','#d9f2e3'];
@@ -36,8 +37,7 @@ const pub=k=>`${CFG.SUPABASE_URL}/storage/v1/object/public/${CFG.BUCKET}/${k}`;
 const mv=$('mv');let st={s:100,r:0,e:10,h:10,a:0,b:0,p:0},stream=null;
 function apply(){
   const sc=st.s/100;
-  const f=stream?(+$('zs').value/100):1,k2=sc*f;
-  mv.setAttribute('scale',`${k2} ${k2} ${k2}`);mv.setAttribute('orientation',`0deg ${st.r}deg 0deg`);
+  mv.setAttribute('scale',`${sc} ${sc} ${sc}`);mv.setAttribute('orientation',`0deg ${st.r}deg 0deg`);
   mv.setAttribute('exposure',st.e/10);mv.setAttribute('shadow-intensity',st.h/10);
   mv.setAttribute('ar-scale',st.p?'fixed':'auto');
   mv.style.backgroundColor=stream?'transparent':BGS[st.b];
@@ -46,27 +46,31 @@ function apply(){
 (async()=>{
   if(!key){$('msg').textContent='連結無效';return}
   try{const r=await fetch(pub(key+'.json')+'?t='+Date.now());if(r.ok)st={...st,...await r.json()}}catch(e){}
-  apply();mv.src=pub(key);
+  apply();FX.init(mv);FX.render(mv,st.sp,s=>pub('fx/'+s.f));mv.src=pub(key);
 })();
-mv.addEventListener('load',()=>{$('msg').textContent='';if(!mv.canActivateAR)$('ar').style.display='none'});
+mv.addEventListener('load',()=>{setTimeout(()=>{if(mv._r0){mv.maxCameraOrbit=`Infinity 180deg ${mv._r0*40}m`;mv.minCameraOrbit=`-Infinity 0deg ${mv._r0*0.3}m`}},400);$('msg').textContent='';if(!mv.canActivateAR)$('ar').style.display='none'});
 mv.addEventListener('error',()=>{$('msg').textContent='模型載入失敗'});
 $('ar').onclick=()=>{mv.activateAR();$('msg').textContent='請慢慢移動手機掃描地面,出現圓點後點擊放置';setTimeout(()=>{$('msg').textContent=''},6000)};
 
 $('cam').onclick=async()=>{
   try{
     stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
-    $('vid').srcObject=stream;$('vid').style.display='block';apply();
+    $('vid').srcObject=stream;$('vid').style.display='block';apply();$('zs').value=30;if(mv._r0)zoomTo(mv._r0*100/30);
     $('cam').style.display=$('ar').style.display='none';$('snap').style.display=$('stop').style.display='inline-block';$('sz').style.display='flex';
     $('msg').textContent='用下方滑桿調整大小,拖動可旋轉,再按拍照';
   }catch(e){$('msg').textContent='未能開啟鏡頭,請允許鏡頭權限(需用 https 開啟)'}
 };
 function stopCam(){
-  if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;$('vid').style.display='none';apply();
+  if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;$('vid').style.display='none';apply();if(mv._r0)zoomTo(mv._r0);
   $('cam').style.display='inline-block';$('ar').style.display=mv.canActivateAR?'inline-block':'none';
   $('snap').style.display=$('stop').style.display='none';$('sz').style.display='none';$('msg').textContent='';
 }
 $('stop').onclick=stopCam;
-$('zs').oninput=apply;
+function zoomTo(R){
+  const o=mv.getCameraOrbit();mv.cameraOrbit=`${o.theta}rad ${o.phi}rad ${R}m`;
+  if(mv.jumpCameraToGoal)mv.jumpCameraToGoal();FX.k(mv);
+}
+$('zs').oninput=()=>{if(mv._r0)zoomTo(mv._r0*100/(+$('zs').value))};
 $('snap').onclick=async()=>{
   const v=$('vid'),dpr=window.devicePixelRatio||1,W=Math.round(innerWidth*dpr),H=Math.round(innerHeight*dpr);
   const c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
@@ -74,6 +78,14 @@ $('snap').onclick=async()=>{
   g.drawImage(v,(W-dw)/2,(H-dh)/2,dw,dh);
   const b=await mv.toBlob({mimeType:'image/png'});
   const bm=await createImageBitmap(b);g.drawImage(bm,0,0,W,H);
+  mv.querySelectorAll('.fxs').forEach(d=>{try{
+    const im=d.querySelector('img'),sp=d.querySelector('.fxa'),r=im.getBoundingClientRect();if(!r.width||!im.naturalWidth)return;
+    const cs=getComputedStyle(sp),m=new DOMMatrix(cs.transform==='none'?undefined:cs.transform),sc=Math.hypot(m.a,m.b);
+    const w=im.offsetWidth*dpr*sc,h=im.offsetHeight*dpr*sc;
+    g.save();g.globalAlpha=(+getComputedStyle(im).opacity)*(+cs.opacity);
+    g.translate((r.left+r.width/2)*dpr,(r.top+r.height/2)*dpr);g.rotate(Math.atan2(m.b,m.a)+(+d.dataset.rot||0)*Math.PI/180);
+    g.drawImage(im,-w/2,-h/2,w,h);g.restore();
+  }catch(e){}});
   c.toBlob(bl=>{const u=URL.createObjectURL(bl);$('img').src=u;$('sv').href=u;$('shot').style.display='flex'},'image/jpeg',.92);
 };
 $('cl').onclick=()=>{$('shot').style.display='none'};

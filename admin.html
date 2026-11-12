@@ -14,6 +14,8 @@ model-viewer{width:100%;height:50vh;min-height:300px;border-radius:10px;display:
 .item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--bd)}
 .item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
 .item button{padding:5px 10px;font-size:13px}
+.thumb{width:56px;height:56px;object-fit:contain;border:2px solid var(--bd);border-radius:8px;background:repeating-conic-gradient(#8884 0 25%,#0000 0 50%) 0 0/12px 12px;flex:none;cursor:pointer}.thumb.on{border-color:var(--ac)}
+.fxrow{display:flex;gap:8px;flex-wrap:wrap;padding:6px 0}
 </style></head><body>
 <header><div>AR Studio 管理</div><button id="out">登出</button></header>
 <main>
@@ -36,6 +38,19 @@ model-viewer{width:100%;height:50vh;min-height:300px;border-radius:10px;display:
   <div class="row"><label>自動旋轉</label><input type="checkbox" id="a"></div>
   <div class="row"><label>AR 固定尺寸</label><input type="checkbox" id="p"></div>
  </div>
+ <div class="card"><b>特效圖片</b> <span class="msg">PNG / GIF / WebP,貼在模型周圍</span>
+  <div style="margin-top:6px"><button id="fxup">上載圖片</button><input type="file" id="fxfile" accept="image/*" hidden></div>
+  <div class="msg">圖片庫(點擊加入模型)</div><div id="lib" class="fxrow" style="flex-wrap:nowrap;overflow-x:auto"></div>
+  <div class="msg">模型上的特效(點擊選取)</div><div id="sps" class="fxrow"></div>
+  <div id="spe" style="display:none">
+   <div class="row"><label>大小</label><input type="range" id="fw" min="20" max="500"></div>
+   <div class="row"><label>透明度</label><input type="range" id="fo" min="10" max="100"></div>
+   <div class="row"><label>旋轉</label><input type="range" id="fr" min="0" max="359"></div>
+   <div class="row"><label>動態</label><select id="fa" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--tx)"></select></div>
+   <button id="fpl">重新放置</button> <button id="fdel">移除</button>
+  </div>
+  <div class="msg" id="fxm"></div>
+ </div>
  <div class="card" style="text-align:center"><b>儲存並生成 QR Code</b><br>
   <button class="pri" id="save" disabled style="margin-top:8px">儲存並生成 QR</button>
   <div class="msg" id="gm"></div>
@@ -48,17 +63,18 @@ model-viewer{width:100%;height:50vh;min-height:300px;border-radius:10px;display:
 <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="config.js"></script>
+<script src="fx.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 const sb=supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_KEY), B=CFG.BUCKET;
 const pub=k=>`${CFG.SUPABASE_URL}/storage/v1/object/public/${B}/${k}`;
 const BGS=['#f4f4f2','#16181d','#dbe7ff','#ffe6d2','#d9f2e3'];
 const DEF={s:100,r:0,e:10,h:10,a:0,b:0,p:0};
-let st={...DEF},cur=null,pending=null,localUrl=null,sizes={};
+const newSt=()=>({...DEF,sp:[]});let st=newSt(),cur=null,pending=null,localUrl=null,sizes={};
 const fmt=n=>n>=1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB';
 const mv=$('mv');
 
-sb.auth.getSession().then(({data})=>{if(!data.session)location.replace('index.html');else loadList()});
+sb.auth.getSession().then(({data})=>{if(!data.session)location.replace('index.html');else{loadList();loadLib()}});
 $('out').onclick=async()=>{await sb.auth.signOut();location.replace('index.html')};
 
 BGS.forEach((c,i)=>{const b=document.createElement('button');b.className='sw';b.style.background=c;b.onclick=()=>{st.b=i;sync()};$('bgs').appendChild(b)});
@@ -79,7 +95,7 @@ sync();
 
 $('drop').onclick=()=>$('file').click();
 function newModel(){
-  pending=null;cur=null;st={...DEF};setUI();sync();
+  pending=null;cur=null;st=newSt();sel=null;setUI();sync();renderFx();drawSps();
   $('file').value='';mv.style.display='none';mv.removeAttribute('src');$('drop').style.display='block';
   $('fname').textContent='';$('save').disabled=true;$('qrw').style.display='none';$('gm').textContent='';
 }
@@ -88,9 +104,9 @@ $('file').onchange=()=>{
   const f=$('file').files[0];if(!f)return;
   if(!/\.glb$/i.test(f.name)){$('fname').textContent='請選擇 .glb 檔案';return}
   if(f.size>50*1024*1024){$('fname').textContent='檔案太大(上限 50 MB,建議 15 MB 內)';return}
-  pending=f;cur=null;st={...DEF};setUI();$('file').value='';
+  pending=f;cur=null;st=newSt();setUI();$('file').value='';
   if(localUrl)URL.revokeObjectURL(localUrl);localUrl=URL.createObjectURL(f);
-  mv.src=localUrl;mv.style.display='block';$('drop').style.display='none';
+  mv.src=localUrl;sel=null;renderFx();drawSps();mv.style.display='block';$('drop').style.display='none';
   $('fname').textContent=f.name+'('+fmt(f.size)+',未儲存)';$('save').disabled=false;$('qrw').style.display='none';sync();
 };
 
@@ -121,6 +137,59 @@ $('dl').onclick=()=>{const a=document.createElement('a');a.href=$('qr').toDataUR
 $('cp').onclick=async()=>{try{await navigator.clipboard.writeText(viewLink());$('gm').textContent='連結已複製'}catch(e){}};
 $('op').onclick=()=>window.open(viewLink(),'_blank');
 
+
+/* ---- 特效圖片 ---- */
+let sel=null,placing=false;
+const ANL={none:'無',flash:'閃爍',float:'上下浮動',pulse:'脈動',spin:'旋轉'};
+$('fa').innerHTML=Object.entries(ANL).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
+FX.init(mv);
+const fxUrl=s=>pub('fx/'+s.f),cs=()=>st.sp.find(s=>s.id===sel);
+function renderFx(){FX.render(mv,st.sp,fxUrl)}
+function fxMsg(t,e){$('fxm').className='msg'+(e?' err':'');$('fxm').textContent=t}
+function drawSps(){
+  const box=$('sps');box.innerHTML='';
+  st.sp.forEach(s=>{const im=document.createElement('img');im.src=fxUrl(s);im.className='thumb'+(s.id===sel?' on':'');im.onclick=()=>{sel=s.id;drawSps()};box.appendChild(im)});
+  const s=cs();$('spe').style.display=s?'block':'none';
+  if(s){$('fw').value=s.w;$('fo').value=s.o;$('fr').value=s.r;$('fa').value=s.an}
+}
+[['fw','w'],['fo','o'],['fr','r']].forEach(([id,k])=>$(id).oninput=()=>{const s=cs();if(s){s[k]=+$(id).value;renderFx()}});
+$('fa').onchange=()=>{const s=cs();if(s){s.an=$('fa').value;renderFx()}};
+$('fpl').onclick=()=>{placing=true;fxMsg('請在模型上點一下,選擇特效要放的位置')};
+$('fdel').onclick=()=>{st.sp=st.sp.filter(s=>s.id!==sel);sel=null;renderFx();drawSps()};
+let dn=null;
+mv.addEventListener('pointerdown',e=>{dn={x:e.clientX,y:e.clientY}});
+mv.addEventListener('pointerup',e=>{
+  if(!placing||!dn||Math.hypot(e.clientX-dn.x,e.clientY-dn.y)>6)return;
+  const r=mv.positionAndNormalFromPoint(e.clientX,e.clientY),s=cs();
+  if(!r||!s){fxMsg('點到模型上才可以放置,請再試一次',1);return}
+  s.x=+r.position.x.toFixed(4);s.y=+r.position.y.toFixed(4);s.z=+r.position.z.toFixed(4);
+  placing=false;fxMsg('已放置。記得按「儲存並生成 QR」');renderFx();
+});
+function addSprite(f){
+  if(mv.style.display==='none'){fxMsg('請先上載或選擇一個模型',1);return}
+  const c=mv.getBoundingBoxCenter?mv.getBoundingBoxCenter():{x:0,y:0,z:0};
+  const id=Math.random().toString(36).slice(2,6);
+  st.sp.push({id,f,x:+c.x.toFixed(4),y:+c.y.toFixed(4),z:+c.z.toFixed(4),w:140,o:100,r:0,an:'none'});
+  sel=id;placing=true;renderFx();drawSps();fxMsg('請在模型上點一下,選擇特效要放的位置');
+}
+async function loadLib(){
+  const {data}=await sb.storage.from(B).list('fx',{limit:100,sortBy:{column:'created_at',order:'desc'}});
+  const L=$('lib');L.innerHTML='';
+  (data||[]).filter(f=>f.name&&!f.name.startsWith('.')).forEach(f=>{
+    const im=document.createElement('img');im.src=pub('fx/'+f.name);im.className='thumb';im.title='點擊加入模型';im.onclick=()=>addSprite(f.name);L.appendChild(im);
+  });
+}
+$('fxup').onclick=()=>$('fxfile').click();
+$('fxfile').onchange=async()=>{
+  const f=$('fxfile').files[0];$('fxfile').value='';if(!f)return;
+  if(f.size>3*1048576){fxMsg('圖片太大(建議 1 MB 內,上限 3 MB)',1);return}
+  const ext=(f.name.split('.').pop()||'png').toLowerCase().replace(/[^a-z0-9]/g,''),safe=f.name.replace(/\.[^.]+$/,'').replace(/[^A-Za-z0-9_-]/g,'_').slice(0,30)||'fx';
+  const key=Math.random().toString(36).slice(2,8)+'-'+safe+'.'+ext;
+  fxMsg('上載中…');
+  const {error}=await sb.storage.from(B).upload('fx/'+key,f,{contentType:f.type||'image/png'});
+  if(error)fxMsg('上載失敗:'+error.message,1);else{fxMsg('已上載,點擊圖片庫的縮圖加入模型');loadLib()}
+};
+
 async function loadList(){
   const {data,error}=await sb.storage.from(B).list('',{limit:100,sortBy:{column:'created_at',order:'desc'}});
   const L=$('list');
@@ -138,9 +207,9 @@ async function loadList(){
   });
 }
 async function edit(key){
-  pending=null;cur=key;st={...DEF};
-  try{const r=await fetch(pub(key+'.json')+'?t='+Date.now());if(r.ok)st={...DEF,...await r.json()}}catch(e){}
-  setUI();mv.src=pub(key);mv.style.display='block';$('drop').style.display='none';
+  pending=null;cur=key;st=newSt();
+  try{const r=await fetch(pub(key+'.json')+'?t='+Date.now());if(r.ok)st={...newSt(),...await r.json()}}catch(e){}
+  if(!Array.isArray(st.sp))st.sp=[];sel=null;setUI();mv.src=pub(key);renderFx();drawSps();mv.style.display='block';$('drop').style.display='none';
   $('fname').textContent=key.replace(/^[a-z0-9]{1,6}-/,'')+(sizes[key]?'('+fmt(sizes[key])+')':'');$('save').disabled=false;sync();drawQR();window.scrollTo(0,0);
 }
 async function del(key){
