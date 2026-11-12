@@ -4,20 +4,22 @@
 <style>
 html,body{height:100%;overflow:hidden}body{padding:0}
 #vid{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:0}
-model-viewer{position:fixed;inset:0;width:100%;height:100%;z-index:1;--poster-color:transparent}
-.bar{position:fixed;left:0;right:0;bottom:calc(22px + env(safe-area-inset-bottom));display:flex;gap:10px;justify-content:center;z-index:3;flex-wrap:wrap;padding:0 12px}
+model-viewer{position:fixed;inset:0;width:100%;height:100%;z-index:2;--poster-color:transparent;background:transparent}
+.bar{position:fixed;left:0;right:0;bottom:calc(22px + env(safe-area-inset-bottom));display:flex;gap:10px;justify-content:center;z-index:5;flex-wrap:wrap;padding:0 12px}
 .bar button{border-radius:999px;padding:13px 20px;font-weight:700;background:var(--ac);color:var(--acx);border:0;box-shadow:0 2px 10px #0004}
 .bar button.alt{background:var(--card);color:var(--tx)}
-#msg{position:fixed;top:calc(12px + env(safe-area-inset-top));left:0;right:0;text-align:center;z-index:3;font-size:13px;pointer-events:none;color:var(--mut)}
+#msg{position:fixed;top:calc(12px + env(safe-area-inset-top));left:0;right:0;text-align:center;z-index:5;font-size:13px;pointer-events:none;color:var(--mut)}
 #shot{position:fixed;inset:0;background:#000d;z-index:9;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:#fff;padding:16px}
 #shot img{max-width:92%;max-height:70%;border-radius:10px}
 </style></head><body>
 <video id="vid" playsinline muted autoplay></video>
+<div class="lay" id="lb" style="position:fixed;z-index:1"></div>
 <model-viewer id="mv" camera-controls touch-action="pan-y" ar ar-modes="webxr scene-viewer quick-look" interaction-prompt="auto">
   <button slot="ar-button" id="arbtn" style="display:none"></button>
 </model-viewer>
+<div class="lay" id="lf" style="position:fixed;z-index:3"></div>
 <div id="msg">載入模型中…</div>
-<div id="sz" style="display:none;position:fixed;left:16px;right:16px;bottom:calc(86px + env(safe-area-inset-bottom));z-index:3;align-items:center;gap:10px;background:#0008;color:#fff;border-radius:999px;padding:8px 16px"><span>大小</span><input type="range" id="zs" min="3" max="150" value="30" style="flex:1;accent-color:#fff"></div>
+<div id="sz" style="display:none;position:fixed;left:16px;right:16px;bottom:calc(86px + env(safe-area-inset-bottom));z-index:5;align-items:center;gap:10px;background:#0008;color:#fff;border-radius:999px;padding:8px 16px"><span>大小</span><input type="range" id="zs" min="3" max="150" value="30" style="flex:1;accent-color:#fff"></div>
 <div class="bar">
   <button id="cam">鏡頭拍照模式</button>
   <button id="ar" class="alt">AR 地面擺放</button>
@@ -40,45 +42,43 @@ function apply(){
   mv.setAttribute('scale',`${sc} ${sc} ${sc}`);mv.setAttribute('orientation',`0deg ${st.r}deg 0deg`);
   mv.setAttribute('exposure',st.e/10);mv.setAttribute('shadow-intensity',st.h/10);
   mv.setAttribute('ar-scale',st.p?'fixed':'auto');
-  mv.style.backgroundColor=stream?'transparent':BGS[st.b];
+  document.body.style.backgroundColor=BGS[st.b];
   st.a&&!stream?mv.setAttribute('auto-rotate',''):mv.removeAttribute('auto-rotate');
 }
 (async()=>{
   if(!key){$('msg').textContent='連結無效';return}
   try{const r=await fetch(pub(key+'.json')+'?t='+Date.now());if(r.ok)st={...st,...await r.json()}}catch(e){}
-  apply();FX.init(mv);FX.render(mv,st.sp,s=>pub('fx/'+s.f));mv.src=pub(key);
+  apply();FX.init(mv,$('lb'),$('lf'),{getScale:()=>st.s/100});FX.set(st.sp||[],s=>pub('fx/'+s.f));mv.src=pub(key);
 })();
-mv.addEventListener('load',()=>{setTimeout(()=>{if(mv._r0){mv.maxCameraOrbit=`Infinity 180deg ${mv._r0*40}m`;mv.minCameraOrbit=`-Infinity 0deg ${mv._r0*0.3}m`}},400);$('msg').textContent='';if(!mv.canActivateAR)$('ar').style.display='none'});
+mv.addEventListener('load',()=>{setTimeout(()=>{const r=FX.r0();if(r){mv.maxCameraOrbit=`Infinity 180deg ${r*40}m`;mv.minCameraOrbit=`-Infinity 0deg ${r*0.3}m`}},500);$('msg').textContent='';if(!mv.canActivateAR)$('ar').style.display='none'});
 mv.addEventListener('error',()=>{$('msg').textContent='模型載入失敗'});
 $('ar').onclick=()=>{mv.activateAR();$('msg').textContent='請慢慢移動手機掃描地面,出現圓點後點擊放置';setTimeout(()=>{$('msg').textContent=''},6000)};
 
 $('cam').onclick=async()=>{
   try{
     stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
-    $('vid').srcObject=stream;$('vid').style.display='block';apply();$('zs').value=30;if(mv._r0)zoomTo(mv._r0*100/30);
+    $('vid').srcObject=stream;$('vid').style.display='block';apply();$('zs').value=30;if(FX.r0())zoomTo(FX.r0()*100/30);
     $('cam').style.display=$('ar').style.display='none';$('snap').style.display=$('stop').style.display='inline-block';$('sz').style.display='flex';
     $('msg').textContent='用下方滑桿調整大小,拖動可旋轉,再按拍照';
   }catch(e){$('msg').textContent='未能開啟鏡頭,請允許鏡頭權限(需用 https 開啟)'}
 };
 function stopCam(){
-  if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;$('vid').style.display='none';apply();if(mv._r0)zoomTo(mv._r0);
+  if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;$('vid').style.display='none';apply();if(FX.r0())zoomTo(FX.r0());
   $('cam').style.display='inline-block';$('ar').style.display=mv.canActivateAR?'inline-block':'none';
   $('snap').style.display=$('stop').style.display='none';$('sz').style.display='none';$('msg').textContent='';
 }
 $('stop').onclick=stopCam;
 function zoomTo(R){
   const o=mv.getCameraOrbit();mv.cameraOrbit=`${o.theta}rad ${o.phi}rad ${R}m`;
-  if(mv.jumpCameraToGoal)mv.jumpCameraToGoal();FX.k(mv);
+  if(mv.jumpCameraToGoal)mv.jumpCameraToGoal();
 }
-$('zs').oninput=()=>{if(mv._r0)zoomTo(mv._r0*100/(+$('zs').value))};
+$('zs').oninput=()=>{if(FX.r0())zoomTo(FX.r0()*100/(+$('zs').value))};
 $('snap').onclick=async()=>{
   const v=$('vid'),dpr=window.devicePixelRatio||1,W=Math.round(innerWidth*dpr),H=Math.round(innerHeight*dpr);
   const c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
   const vw=v.videoWidth,vh=v.videoHeight,k=Math.max(W/vw,H/vh),dw=vw*k,dh=vh*k;
   g.drawImage(v,(W-dw)/2,(H-dh)/2,dw,dh);
-  const b=await mv.toBlob({mimeType:'image/png'});
-  const bm=await createImageBitmap(b);g.drawImage(bm,0,0,W,H);
-  mv.querySelectorAll('.fxs').forEach(d=>{try{
+  const drawLayer=lay=>lay.querySelectorAll('.fxi').forEach(d=>{try{
     const im=d.querySelector('img'),sp=d.querySelector('.fxa'),r=im.getBoundingClientRect();if(!r.width||!im.naturalWidth)return;
     const cs=getComputedStyle(sp),m=new DOMMatrix(cs.transform==='none'?undefined:cs.transform),sc=Math.hypot(m.a,m.b);
     const w=im.offsetWidth*dpr*sc,h=im.offsetHeight*dpr*sc;
@@ -86,6 +86,10 @@ $('snap').onclick=async()=>{
     g.translate((r.left+r.width/2)*dpr,(r.top+r.height/2)*dpr);g.rotate(Math.atan2(m.b,m.a)+(+d.dataset.rot||0)*Math.PI/180);
     g.drawImage(im,-w/2,-h/2,w,h);g.restore();
   }catch(e){}});
+  drawLayer($('lb'));
+  const b=await mv.toBlob({mimeType:'image/png'});
+  const bm=await createImageBitmap(b);g.drawImage(bm,0,0,W,H);
+  drawLayer($('lf'));
   c.toBlob(bl=>{const u=URL.createObjectURL(bl);$('img').src=u;$('sv').href=u;$('shot').style.display='flex'},'image/jpeg',.92);
 };
 $('cl').onclick=()=>{$('shot').style.display='none'};

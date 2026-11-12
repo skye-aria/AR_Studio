@@ -4,8 +4,9 @@
 <style>
 header{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid var(--bd);font-weight:700}
 main{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(300px,1fr);gap:16px;padding:16px;max-width:1100px;margin:0 auto}
-@media(max-width:800px){main{grid-template-columns:1fr}}
-model-viewer{width:100%;height:50vh;min-height:300px;border-radius:10px;display:none}
+@media(max-width:800px){main{grid-template-columns:1fr}main>section{display:contents!important}.mvcard{position:sticky;top:0;z-index:20}.mvcard model-viewer{height:38vh;min-height:220px}.listcard{order:10}}
+#stage{position:relative;border-radius:10px;overflow:hidden}
+model-viewer{width:100%;height:50vh;min-height:300px;display:none;background:transparent}
 #drop{border:2px dashed var(--bd);border-radius:12px;padding:34px 16px;text-align:center;color:var(--mut);cursor:pointer}
 .row{display:flex;align-items:center;gap:10px;margin:8px 0}.row label{width:90px;flex:none;color:var(--mut);font-size:13px}
 .row input[type=range]{flex:1;min-width:0;accent-color:var(--ac)}.row output{width:44px;text-align:right;font-size:13px}
@@ -20,13 +21,13 @@ model-viewer{width:100%;height:50vh;min-height:300px;border-radius:10px;display:
 <header><div>AR Studio 管理</div><button id="out">登出</button></header>
 <main>
 <section style="display:grid;gap:16px;align-content:start">
- <div class="card">
+ <div class="card mvcard">
   <div id="drop">點擊選擇 .glb 檔案(約 15 MB 內)</div>
   <input type="file" id="file" accept=".glb" hidden>
-  <model-viewer id="mv" camera-controls touch-action="pan-y" interaction-prompt="none"></model-viewer>
+  <div id="stage"><div class="lay" id="lb"></div><model-viewer id="mv" camera-controls touch-action="pan-y" interaction-prompt="none"></model-viewer><div class="lay" id="lf"></div></div>
   <div class="msg" id="fname"></div>
  </div>
- <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>已上載的模型</b><button class="pri" id="nw" style="padding:6px 12px">＋ 上載新模型</button></div><div class="msg" id="tot"></div><div id="list" class="msg">載入中…</div></div>
+ <div class="card listcard"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>已上載的模型</b><button class="pri" id="nw" style="padding:6px 12px">＋ 上載新模型</button></div><div class="msg" id="tot"></div><div id="list" class="msg">載入中…</div></div>
 </section>
 <section style="display:grid;gap:16px;align-content:start">
  <div class="card"><b>編輯</b>
@@ -38,16 +39,17 @@ model-viewer{width:100%;height:50vh;min-height:300px;border-radius:10px;display:
   <div class="row"><label>自動旋轉</label><input type="checkbox" id="a"></div>
   <div class="row"><label>AR 固定尺寸</label><input type="checkbox" id="p"></div>
  </div>
- <div class="card"><b>特效圖片</b> <span class="msg">PNG / GIF / WebP,貼在模型周圍</span>
+ <div class="card"><b>特效圖片</b> <span class="msg">PNG / GIF / WebP</span>
   <div style="margin-top:6px"><button id="fxup">上載圖片</button><input type="file" id="fxfile" accept="image/*" hidden></div>
   <div class="msg">圖片庫(點擊加入模型)</div><div id="lib" class="fxrow" style="flex-wrap:nowrap;overflow-x:auto"></div>
-  <div class="msg">模型上的特效(點擊選取)</div><div id="sps" class="fxrow"></div>
+  <div class="msg">模型上的特效(點選後,直接用手指在上方預覽拖動圖片即可移位)</div><div id="sps" class="fxrow"></div>
   <div id="spe" style="display:none">
    <div class="row"><label>大小</label><input type="range" id="fw" min="20" max="500"></div>
    <div class="row"><label>透明度</label><input type="range" id="fo" min="10" max="100"></div>
    <div class="row"><label>旋轉</label><input type="range" id="fr" min="0" max="359"></div>
+   <div class="row"><label>層次</label><select id="fl" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--tx)"><option value="f">在模型前面</option><option value="b">在模型後面</option></select></div>
    <div class="row"><label>動態</label><select id="fa" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--tx)"></select></div>
-   <button id="fpl">重新放置</button> <button id="fdel">移除</button>
+   <button id="fpl">移到畫面中心</button> <button id="fdel">移除</button>
   </div>
   <div class="msg" id="fxm"></div>
  </div>
@@ -88,7 +90,7 @@ function sync(){
   const sc=st.s/100;
   mv.setAttribute('scale',`${sc} ${sc} ${sc}`);mv.setAttribute('orientation',`0deg ${st.r}deg 0deg`);
   mv.setAttribute('exposure',st.e/10);mv.setAttribute('shadow-intensity',st.h/10);
-  mv.style.backgroundColor=BGS[st.b];
+  $('stage').style.backgroundColor=BGS[st.b];
   st.a?mv.setAttribute('auto-rotate',''):mv.removeAttribute('auto-rotate');
 }
 sync();
@@ -139,38 +141,29 @@ $('op').onclick=()=>window.open(viewLink(),'_blank');
 
 
 /* ---- 特效圖片 ---- */
-let sel=null,placing=false;
+let sel=null;
 const ANL={none:'無',flash:'閃爍',float:'上下浮動',pulse:'脈動',spin:'旋轉'};
 $('fa').innerHTML=Object.entries(ANL).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
-FX.init(mv);
+FX.init(mv,$('lb'),$('lf'),{edit:true,getScale:()=>st.s/100,onSelect:id=>{sel=id;FX.select(id);drawSps()}});
 const fxUrl=s=>pub('fx/'+s.f),cs=()=>st.sp.find(s=>s.id===sel);
-function renderFx(){FX.render(mv,st.sp,fxUrl)}
+function renderFx(){FX.set(st.sp,fxUrl);FX.select(sel)}
 function fxMsg(t,e){$('fxm').className='msg'+(e?' err':'');$('fxm').textContent=t}
 function drawSps(){
   const box=$('sps');box.innerHTML='';
-  st.sp.forEach(s=>{const im=document.createElement('img');im.src=fxUrl(s);im.className='thumb'+(s.id===sel?' on':'');im.onclick=()=>{sel=s.id;drawSps()};box.appendChild(im)});
+  st.sp.forEach(s=>{const im=document.createElement('img');im.src=fxUrl(s);im.className='thumb'+(s.id===sel?' on':'');im.onclick=()=>{sel=s.id;FX.select(sel);drawSps()};box.appendChild(im)});
   const s=cs();$('spe').style.display=s?'block':'none';
-  if(s){$('fw').value=s.w;$('fo').value=s.o;$('fr').value=s.r;$('fa').value=s.an}
+  if(s){$('fw').value=s.w;$('fo').value=s.o;$('fr').value=s.r;$('fa').value=s.an;$('fl').value=s.l||'f'}
 }
-[['fw','w'],['fo','o'],['fr','r']].forEach(([id,k])=>$(id).oninput=()=>{const s=cs();if(s){s[k]=+$(id).value;renderFx()}});
-$('fa').onchange=()=>{const s=cs();if(s){s.an=$('fa').value;renderFx()}};
-$('fpl').onclick=()=>{placing=true;fxMsg('請在模型上點一下,選擇特效要放的位置')};
+[['fw','w'],['fo','o'],['fr','r']].forEach(([id,k])=>$(id).oninput=()=>{const s=cs();if(s){s[k]=+$(id).value;FX.touch(s);if(k==='w'||k==='o'||k==='r')FX.touch(s)}});
+$('fa').onchange=()=>{const s=cs();if(s){s.an=$('fa').value;FX.touch(s)}};
+$('fl').onchange=()=>{const s=cs();if(s){s.l=$('fl').value;FX.touch(s);fxMsg(s.l==='b'?'「在模型後面」的圖片,選取編輯時會暫時顯示在前面,取消選取後就會回到後面':'')}};
+$('fpl').onclick=()=>{const s=cs();if(!s)return;const t=mv.getCameraTarget(),sc=st.s/100;s.x=+(t.x/sc).toFixed(4);s.y=+(t.y/sc).toFixed(4);s.z=+(t.z/sc).toFixed(4)};
 $('fdel').onclick=()=>{st.sp=st.sp.filter(s=>s.id!==sel);sel=null;renderFx();drawSps()};
-let dn=null;
-mv.addEventListener('pointerdown',e=>{dn={x:e.clientX,y:e.clientY}});
-mv.addEventListener('pointerup',e=>{
-  if(!placing||!dn||Math.hypot(e.clientX-dn.x,e.clientY-dn.y)>6)return;
-  const r=mv.positionAndNormalFromPoint(e.clientX,e.clientY),s=cs();
-  if(!r||!s){fxMsg('點到模型上才可以放置,請再試一次',1);return}
-  s.x=+r.position.x.toFixed(4);s.y=+r.position.y.toFixed(4);s.z=+r.position.z.toFixed(4);
-  placing=false;fxMsg('已放置。記得按「儲存並生成 QR」');renderFx();
-});
 function addSprite(f){
-  if(mv.style.display==='none'){fxMsg('請先上載或選擇一個模型',1);return}
-  const c=mv.getBoundingBoxCenter?mv.getBoundingBoxCenter():{x:0,y:0,z:0};
-  const id=Math.random().toString(36).slice(2,6);
-  st.sp.push({id,f,x:+c.x.toFixed(4),y:+c.y.toFixed(4),z:+c.z.toFixed(4),w:140,o:100,r:0,an:'none'});
-  sel=id;placing=true;renderFx();drawSps();fxMsg('請在模型上點一下,選擇特效要放的位置');
+  if(!mv.getAttribute('src')){fxMsg('請先上載或選擇一個模型',1);return}
+  const t=mv.getCameraTarget(),sc=st.s/100,id=Math.random().toString(36).slice(2,6);
+  st.sp.push({id,f,x:+(t.x/sc).toFixed(4),y:+(t.y/sc).toFixed(4),z:+(t.z/sc).toFixed(4),w:140,o:100,r:0,an:'none',l:'f'});
+  sel=id;renderFx();drawSps();fxMsg('已加入。用手指在上方預覽直接拖動圖片,即可移到想要的位置');
 }
 async function loadLib(){
   const {data}=await sb.storage.from(B).list('fx',{limit:100,sortBy:{column:'created_at',order:'desc'}});
