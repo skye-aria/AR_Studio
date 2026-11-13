@@ -43,7 +43,14 @@ const FX=window.FX={
   init(mv,back,front,o){
     C={mv,back,front,o:o||{},list:[],els:{},sel:null,r0:0,cam:null};
     if(C.o.edit){back.classList.add('edit');front.classList.add('edit')}
-    mv.addEventListener('load',()=>setTimeout(()=>{C.r0=mv.getCameraOrbit().radius},250));
+    mv.addEventListener('load',()=>{
+      let last=-1,ok=0,tries=0;
+      const iv=setInterval(()=>{
+        const r=mv.getCameraOrbit().radius;tries++;
+        ok=Math.abs(r-last)<1e-4?ok+1:0;last=r;
+        if(ok>=2||tries>25){C.r0=r;clearInterval(iv)}
+      },120);
+    });
     requestAnimationFrame(loop);
   },
   r0(){return C&&C.r0},
@@ -133,7 +140,8 @@ function loop(){
   if(!C.list.length||mv.style.display==='none'||!mv.getCameraOrbit)return;
   const W=mv.clientWidth,H=mv.clientHeight;if(!W||!H)return;
   const o=mv.getCameraOrbit(),t=mv.getCameraTarget(),fov=mv.getFieldOfView();
-  const c=C.cam=FX.cam(o,t,fov,W,H),sc=C.o.getScale?C.o.getScale():1,r0=C.r0||o.radius,T=performance.now()/1000;
+  const c=C.cam=FX.cam(o,t,fov,W,H),sc=C.o.getScale?C.o.getScale():1,T=performance.now()/1000;
+  const dm=mv.getDimensions?mv.getDimensions():null,U=(dm&&Math.max(dm.x,dm.y,dm.z)>0)?Math.max(dm.x,dm.y,dm.z)*1.3:(C.r0||o.radius);
   C.list.forEach(p=>{
     const d=C.els[p.id];if(!d)return;
     const im=d.querySelector('img'),ctr=FX.project(c,{x:p.x*sc,y:p.y*sc,z:p.z*sc});
@@ -141,7 +149,7 @@ function loop(){
     d._zc=ctr.zc;
     if(p.m==='p'){
       const asp=(im.naturalWidth&&im.naturalHeight)?im.naturalHeight/im.naturalWidth:1;
-      const ww=p.w*(2*c.tf*r0/800);let hw=ww/2,hh=hw*asp,cy=p.y*sc,ry=p.ry||0;
+      const ww=p.w*(2*c.tf*U/800);let hw=ww/2,hh=hw*asp,cy=p.y*sc,ry=p.ry||0;
       if(p.an==='float')cy+=Math.sin(T*2*Math.PI/2.4)*ww*0.08;
       if(p.an==='pulse'){const k=1+0.09*(1-Math.cos(T*2*Math.PI/1.4));hw*=k;hh*=k}
       if(p.an==='spin')ry+=(T*90)%360;
@@ -162,7 +170,7 @@ function loop(){
       if(d._plane){d._plane=false;im.style.height='';im.style.transform='';im.style.transformOrigin=''}
       d.style.display='';
       d.style.transform='translate('+ctr.x.toFixed(1)+'px,'+ctr.y.toFixed(1)+'px)';
-      im.style.width=(p.w*(H/800)*r0/ctr.zc).toFixed(1)+'px';
+      im.style.width=(p.w*(H/800)*U/ctr.zc).toFixed(1)+'px';
     }
   });
 }

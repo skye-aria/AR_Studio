@@ -36,7 +36,8 @@ const $=id=>document.getElementById(id);
 const BGS=['#f4f4f2','#16181d','#dbe7ff','#ffe6d2','#d9f2e3'];
 const key=new URLSearchParams(location.search).get('m');
 const pub=k=>`${CFG.SUPABASE_URL}/storage/v1/object/public/${CFG.BUCKET}/${k}`;
-const mv=$('mv');let st={s:100,r:0,e:10,h:10,a:0,b:0,p:0},stream=null;
+const mv=$('mv');
+mv.addEventListener('dblclick',e=>{e.preventDefault();e.stopPropagation()},true);let st={s:100,r:0,e:10,h:10,a:0,b:0,p:0},stream=null;
 function apply(){
   const sc=st.s/100;
   mv.setAttribute('scale',`${sc} ${sc} ${sc}`);mv.setAttribute('orientation',`0deg ${st.r}deg 0deg`);
@@ -50,20 +51,20 @@ function apply(){
   try{const r=await fetch(pub(key+'.json')+'?t='+Date.now());if(r.ok)st={...st,...await r.json()}}catch(e){}
   apply();FX.init(mv,$('lb'),$('lf'),{getScale:()=>st.s/100});FX.set(st.sp||[],s=>pub('fx/'+s.f));mv.src=pub(key);
 })();
-mv.addEventListener('load',()=>{setTimeout(()=>{const r=FX.r0();if(r){mv.maxCameraOrbit=`Infinity 180deg ${r*40}m`;mv.minCameraOrbit=`-Infinity 0deg ${r*0.3}m`}},500);$('msg').textContent='';if(!mv.canActivateAR)$('ar').style.display='none'});
+mv.addEventListener('load',()=>{$('msg').textContent='';if(!mv.canActivateAR)$('ar').style.display='none'});
 mv.addEventListener('error',()=>{$('msg').textContent='模型載入失敗'});
 $('ar').onclick=()=>{mv.activateAR();$('msg').textContent='請慢慢移動手機掃描地面,出現圓點後點擊放置';setTimeout(()=>{$('msg').textContent=''},6000)};
 
 $('cam').onclick=async()=>{
   try{
     stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
-    $('vid').srcObject=stream;$('vid').style.display='block';apply();$('zs').value=30;if(FX.r0())zoomTo(FX.r0()*100/30);
+    $('vid').srcObject=stream;$('vid').style.display='block';apply();$('zs').value=30;{const r=FX.r0();if(r){mv.maxCameraOrbit=`Infinity 180deg ${r*20}m`;mv.minCameraOrbit=`-Infinity 0deg ${r*0.3}m`;zoomTo(r*100/30)}}
     $('cam').style.display=$('ar').style.display='none';$('snap').style.display=$('stop').style.display='inline-block';$('sz').style.display='flex';
     $('msg').textContent='用下方滑桿調整大小,拖動可旋轉,再按拍照';
   }catch(e){$('msg').textContent='未能開啟鏡頭,請允許鏡頭權限(需用 https 開啟)'}
 };
 function stopCam(){
-  if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;$('vid').style.display='none';apply();if(FX.r0())zoomTo(FX.r0());
+  if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;$('vid').style.display='none';apply();mv.maxCameraOrbit='Infinity 180deg auto';mv.minCameraOrbit='-Infinity 0deg auto';if(FX.r0())zoomTo(FX.r0());
   $('cam').style.display='inline-block';$('ar').style.display=mv.canActivateAR?'inline-block':'none';
   $('snap').style.display=$('stop').style.display='none';$('sz').style.display='none';$('msg').textContent='';
 }
