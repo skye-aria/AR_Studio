@@ -164,7 +164,7 @@ function drawSps(){
 $('fm').onchange=()=>{const s=cs();if(s){s.m=$('fm').value;$('fyrow').style.display=s.m==='p'?'flex':'none';FX.touch(s)}};
 $('fa').onchange=()=>{const s=cs();if(s){s.an=$('fa').value;FX.touch(s)}};
 function fzLabel(){const v=+$('fz').value;$('fzo').textContent=v<0?'後 '+(-v):'前 '+(v+1)}
-$('fz').oninput=()=>{const s=cs();if(s){s.lz=+$('fz').value;delete s.l;fzLabel();FX.touch(s);fxMsg(s.lz<0?'「後面」的圖片,選取編輯時會暫時顯示在最上面,取消選取後就會回到模型後面':'')}};
+$('fz').oninput=()=>{const s=cs();if(s){s.lz=+$('fz').value;delete s.l;fzLabel();FX.touch(s);fxMsg(s.lz<0?'圖片在模型後面時,請拖動圖片中心的紫色圓點來移位':'')}};
 $('fpl').onclick=()=>{const s=cs();if(!s)return;const t=mv.getCameraTarget(),sc=st.s/100;s.x=+(t.x/sc).toFixed(4);s.y=+(t.y/sc).toFixed(4);s.z=+(t.z/sc).toFixed(4)};
 $('fdel').onclick=()=>{st.sp=st.sp.filter(s=>s.id!==sel);sel=null;renderFx();drawSps()};
 function addSprite(f){

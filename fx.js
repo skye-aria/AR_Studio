@@ -7,6 +7,8 @@ css.textContent=`
 .fxa{position:absolute;left:0;top:0;width:0;height:0}
 .fxa img{position:absolute;left:0;top:0;max-width:none;height:auto;pointer-events:none;user-select:none;-webkit-user-drag:none;transform:translate(-50%,-50%) rotate(var(--rot,0deg));opacity:var(--op,1)}
 .lay.edit .fxa img{pointer-events:auto;cursor:grab;touch-action:none}
+.fxh{position:absolute;left:0;top:0;width:30px;height:30px;border-radius:50%;background:#818cf8;border:3px solid #fff;box-shadow:0 0 0 2px #0006;pointer-events:none;z-index:1000}
+.lay.edit .fxh{pointer-events:auto;touch-action:none;cursor:grab}
 .fxi.sel .fxa img{outline:2px dashed #818cf8;outline-offset:2px}
 .an-flash{animation:fxflash 1.2s infinite}
 .an-float{animation:fxfloat 2.4s ease-in-out infinite}
@@ -43,6 +45,15 @@ const FX=window.FX={
   init(mv,back,front,o){
     C={mv,back,front,o:o||{},list:[],els:{},sel:null,r0:0,cam:null};
     if(C.o.edit){back.classList.add('edit');front.classList.add('edit')}
+    if(C.o.edit){
+      const h=document.createElement('div');h.className='fxh';h.style.display='none';C.handle=h;front.appendChild(h);
+      h.addEventListener('pointerdown',e=>{e.preventDefault();h.setPointerCapture(e.pointerId);h._drag=true});
+      h.addEventListener('pointermove',e=>{
+        if(!h._drag)return;const p=C.list.find(q=>q.id===C.sel),d=p&&C.els[p.id];
+        if(p&&d)dragTo(p,d,e);
+      });
+      const hend=()=>{h._drag=false};h.addEventListener('pointerup',hend);h.addEventListener('pointercancel',hend);
+    }
     mv.addEventListener('load',()=>{
       let last=-1,ok=0,tries=0;
       const iv=setInterval(()=>{
@@ -56,12 +67,19 @@ const FX=window.FX={
   r0(){return C&&C.r0},
   set(list,url){
     C.list=list||[];C.url=url;C.back.innerHTML='';C.front.innerHTML='';C.els={};
+    if(C.handle)C.front.appendChild(C.handle);
     C.list.forEach(build);
   },
   select(id){C.sel=id;C.list.forEach(touch)},
   touch(p){touch(p)}
 };
 
+function dragTo(p,d,e){
+  if(!C.cam||!d._zc)return;
+  const rc=C.mv.getBoundingClientRect(),sc=C.o.getScale?C.o.getScale():1;
+  const P=FX.unproject(C.cam,e.clientX-rc.left,e.clientY-rc.top,d._zc);
+  p.x=+(P.x/sc).toFixed(4);p.y=+(P.y/sc).toFixed(4);p.z=+(P.z/sc).toFixed(4);
+}
 function build(p){
   const d=document.createElement('div');d.className='fxi';
   const a=document.createElement('span');a.className='fxa';
@@ -71,12 +89,7 @@ function build(p){
     if(!C.o.edit)return;e.preventDefault();im.setPointerCapture(e.pointerId);d._drag=true;
     C.o.onSelect&&C.o.onSelect(p.id);
   });
-  im.addEventListener('pointermove',e=>{
-    if(!d._drag||!C.cam||!d._zc)return;
-    const rc=C.mv.getBoundingClientRect(),sc=C.o.getScale?C.o.getScale():1;
-    const P=FX.unproject(C.cam,e.clientX-rc.left,e.clientY-rc.top,d._zc);
-    p.x=+(P.x/sc).toFixed(4);p.y=+(P.y/sc).toFixed(4);p.z=+(P.z/sc).toFixed(4);
-  });
+  im.addEventListener('pointermove',e=>{if(d._drag)dragTo(p,d,e)});
   const end=()=>{d._drag=false};
   im.addEventListener('pointerup',end);im.addEventListener('pointercancel',end);
   touch(p);
@@ -90,8 +103,8 @@ function touch(p){
   const plane=p.m==='p';
   d.firstChild.className='fxa'+(p.an==='flash'||(!plane&&p.an&&p.an!=='none')?' an-'+p.an:'');
   d.classList.toggle('sel',p.id===C.sel);
-  const z=zOf(p),lay=(z<0&&p.id!==C.sel)?C.back:C.front;
-  d.style.zIndex=p.id===C.sel?100:(z+10);
+  const z=zOf(p),lay=z<0?C.back:C.front;
+  d.style.zIndex=z+10;
   if(d.parentNode!==lay&&!d._drag)lay.appendChild(d);
 }
 // 4 點對應 → 透視變換係數
@@ -145,12 +158,14 @@ function loop(){
   const o=mv.getCameraOrbit(),t=mv.getCameraTarget(),fov=mv.getFieldOfView();
   const c=C.cam=FX.cam(o,t,fov,W,H),sc=C.o.getScale?C.o.getScale():1,T=performance.now()/1000;
   const dm=mv.getDimensions?mv.getDimensions():null,U=(dm&&Math.max(dm.x,dm.y,dm.z)>0)?Math.max(dm.x,dm.y,dm.z)*1.3:(C.r0||o.radius);
-  const T0=C.tf0||c.tf;
+  const T0=Math.tan(22.5*Math.PI/180);
+  let hs=null;
   C.list.forEach(p=>{
     const d=C.els[p.id];if(!d)return;
     const im=d.querySelector('img'),ctr=FX.project(c,{x:p.x*sc,y:p.y*sc,z:p.z*sc});
     if(!(ctr.zc>0.001)){d.style.display='none';return}
     d._zc=ctr.zc;
+    if(p.id===C.sel&&zOf(p)<0)hs=[ctr.x,ctr.y];
     if(p.m==='p'){
       const asp=(im.naturalWidth&&im.naturalHeight)?im.naturalHeight/im.naturalWidth:1;
       const ww=p.w*(2*T0*U/800);let hw=ww/2,hh=hw*asp,cy=p.y*sc,ry=p.ry||0;
@@ -177,5 +192,9 @@ function loop(){
       im.style.width=(p.w*(H/800)*U*(T0/c.tf)/ctr.zc).toFixed(1)+'px';
     }
   });
+  if(C.handle){
+    if(hs){C.handle.style.display='block';C.handle.style.transform='translate('+hs[0].toFixed(1)+'px,'+hs[1].toFixed(1)+'px) translate(-50%,-50%)'}
+    else C.handle.style.display='none';
+  }
 }
 })();
