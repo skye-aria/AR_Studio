@@ -49,7 +49,8 @@ model-viewer{width:100%;height:50vh;min-height:300px;display:none;background:tra
    <div class="row"><label>旋轉</label><input type="range" id="fr" min="0" max="359"></div>
    <div class="row"><label>類型</label><select id="fm" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--tx)"><option value="p">固定在模型上的平面(會跟模型轉)</option><option value="b">面向鏡頭的貼紙</option></select></div>
    <div class="row" id="fyrow"><label>平面朝向</label><input type="range" id="fy" min="0" max="359"></div>
-   <div class="row"><label>層次</label><select id="fl" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--tx)"><option value="f">在模型前面</option><option value="b">在模型後面</option></select></div>
+   <div class="row"><label>層次</label><input type="range" id="fz" min="-5" max="5" step="1"><output id="fzo" style="width:64px"></output></div>
+   <div class="msg" style="margin:0">負數在模型後面、正數在模型前面;數字越大越在上面</div>
    <div class="row"><label>動態</label><select id="fa" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--tx)"></select></div>
    <button id="fpl">移到畫面中心</button> <button id="fdel">移除</button>
   </div>
@@ -157,18 +158,19 @@ function drawSps(){
   const box=$('sps');box.innerHTML='';
   st.sp.forEach(s=>{const im=document.createElement('img');im.src=fxUrl(s);im.className='thumb'+(s.id===sel?' on':'');im.onclick=()=>{sel=s.id;FX.select(sel);drawSps()};box.appendChild(im)});
   const s=cs();$('spe').style.display=s?'block':'none';
-  if(s){$('fw').value=s.w;$('fo').value=s.o;$('fr').value=s.r;$('fa').value=s.an;$('fl').value=s.l||'f';$('fm').value=s.m||'b';$('fy').value=s.ry||0;$('fyrow').style.display=s.m==='p'?'flex':'none'}
+  if(s){$('fw').value=s.w;$('fo').value=s.o;$('fr').value=s.r;$('fa').value=s.an;$('fz').value=FX.zOf(s);fzLabel();$('fm').value=s.m||'b';$('fy').value=s.ry||0;$('fyrow').style.display=s.m==='p'?'flex':'none'}
 }
 [['fw','w'],['fo','o'],['fr','r'],['fy','ry']].forEach(([id,k])=>$(id).oninput=()=>{const s=cs();if(s){s[k]=+$(id).value;FX.touch(s);if(k==='w'||k==='o'||k==='r')FX.touch(s)}});
 $('fm').onchange=()=>{const s=cs();if(s){s.m=$('fm').value;$('fyrow').style.display=s.m==='p'?'flex':'none';FX.touch(s)}};
 $('fa').onchange=()=>{const s=cs();if(s){s.an=$('fa').value;FX.touch(s)}};
-$('fl').onchange=()=>{const s=cs();if(s){s.l=$('fl').value;FX.touch(s);fxMsg(s.l==='b'?'「在模型後面」的圖片,選取編輯時會暫時顯示在前面,取消選取後就會回到後面':'')}};
+function fzLabel(){const v=+$('fz').value;$('fzo').textContent=v<0?'後 '+(-v):'前 '+(v+1)}
+$('fz').oninput=()=>{const s=cs();if(s){s.lz=+$('fz').value;delete s.l;fzLabel();FX.touch(s);fxMsg(s.lz<0?'「後面」的圖片,選取編輯時會暫時顯示在最上面,取消選取後就會回到模型後面':'')}};
 $('fpl').onclick=()=>{const s=cs();if(!s)return;const t=mv.getCameraTarget(),sc=st.s/100;s.x=+(t.x/sc).toFixed(4);s.y=+(t.y/sc).toFixed(4);s.z=+(t.z/sc).toFixed(4)};
 $('fdel').onclick=()=>{st.sp=st.sp.filter(s=>s.id!==sel);sel=null;renderFx();drawSps()};
 function addSprite(f){
   if(!mv.src){fxMsg('請先上載或選擇一個模型',1);return}
   const t=mv.getCameraTarget(),sc=st.s/100,id=Math.random().toString(36).slice(2,6);
-  st.sp.push({id,f,x:+(t.x/sc).toFixed(4),y:+(t.y/sc).toFixed(4),z:+(t.z/sc).toFixed(4),w:140,o:100,r:0,an:'none',l:'f',m:'p',ry:0});
+  st.sp.push({id,f,x:+(t.x/sc).toFixed(4),y:+(t.y/sc).toFixed(4),z:+(t.z/sc).toFixed(4),w:140,o:100,r:0,an:'none',lz:1,m:'p',ry:0});
   sel=id;renderFx();drawSps();fxMsg('已加入(平面)。用手指拖動圖片移位;「平面朝向」可轉動方向,轉動模型時圖片會跟著變形');
 }
 async function loadLib(){

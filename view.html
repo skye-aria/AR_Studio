@@ -79,7 +79,7 @@ $('snap').onclick=async()=>{
   const c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
   const vw=v.videoWidth,vh=v.videoHeight,k=Math.max(W/vw,H/vh),dw=vw*k,dh=vh*k;
   g.drawImage(v,(W-dw)/2,(H-dh)/2,dw,dh);
-  const drawLayer=lay=>lay.querySelectorAll('.fxi').forEach(d=>{try{
+  const drawLayer=lay=>[...lay.querySelectorAll('.fxi')].sort((a,b)=>(+a.style.zIndex||0)-(+b.style.zIndex||0)).forEach(d=>{try{
     const im=d.querySelector('img'),sp=d.querySelector('.fxa');
     if(d._plane&&d._H&&d.style.display!=='none'&&im.naturalWidth){
       g.save();g.globalAlpha=(+getComputedStyle(im).opacity)*(+getComputedStyle(sp).opacity);

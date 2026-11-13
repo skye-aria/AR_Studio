@@ -81,6 +81,8 @@ function build(p){
   im.addEventListener('pointerup',end);im.addEventListener('pointercancel',end);
   touch(p);
 }
+function zOf(p){return typeof p.lz==='number'?p.lz:(p.l==='b'?-1:1)}
+FX.zOf=zOf;
 function touch(p){
   const d=C.els[p.id];if(!d)return;
   d.dataset.rot=p.r||0;
@@ -88,7 +90,8 @@ function touch(p){
   const plane=p.m==='p';
   d.firstChild.className='fxa'+(p.an==='flash'||(!plane&&p.an&&p.an!=='none')?' an-'+p.an:'');
   d.classList.toggle('sel',p.id===C.sel);
-  const lay=(p.l==='b'&&p.id!==C.sel)?C.back:C.front;
+  const z=zOf(p),lay=(z<0&&p.id!==C.sel)?C.back:C.front;
+  d.style.zIndex=p.id===C.sel?100:(z+10);
   if(d.parentNode!==lay&&!d._drag)lay.appendChild(d);
 }
 // 4 點對應 → 透視變換係數
