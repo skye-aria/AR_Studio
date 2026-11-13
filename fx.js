@@ -13,11 +13,26 @@ css.textContent=`
 .an-flash{animation:fxflash 1.2s infinite}
 .an-float{animation:fxfloat 2.4s ease-in-out infinite}
 .an-pulse{animation:fxpulse 1.4s ease-in-out infinite}
-.an-spin{animation:fxspin 4s linear infinite}
+.an-spin{animation:fxspin 4s linear infinite}.an-sway{animation:fxsway 2s ease-in-out infinite}
+.an-bounce{animation:fxbounce 1.1s ease-in-out infinite}
+.an-heartbeat{animation:fxbeat 1.3s infinite}
+.an-fade{animation:fxfade 2.4s ease-in-out infinite}
+.an-shake{animation:fxshake .4s linear infinite}
+.an-orbit{animation:fxorbit 3.5s linear infinite}
+.an-twinkle{animation:fxtwinkle 1.6s ease-in-out infinite}
+.an-twkop{animation:fxtwkop 1.6s ease-in-out infinite}
 @keyframes fxflash{0%,100%{opacity:1}10%{opacity:.15}20%{opacity:1}30%{opacity:.4}40%,90%{opacity:1}}
 @keyframes fxfloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
 @keyframes fxpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.18)}}
-@keyframes fxspin{to{transform:rotate(360deg)}}`;
+@keyframes fxspin{to{transform:rotate(360deg)}}
+@keyframes fxsway{0%,100%{transform:rotate(-12deg)}50%{transform:rotate(12deg)}}
+@keyframes fxbounce{0%,100%{transform:translateY(0)}45%{transform:translateY(-28px)}}
+@keyframes fxbeat{0%,40%,100%{transform:scale(1)}10%{transform:scale(1.22)}20%{transform:scale(1.02)}30%{transform:scale(1.16)}}
+@keyframes fxfade{0%,100%{opacity:.15}50%{opacity:1}}
+@keyframes fxshake{0%,100%{transform:translate(0,0)}20%{transform:translate(-4px,2px)}40%{transform:translate(4px,-2px)}60%{transform:translate(-3px,-2px)}80%{transform:translate(3px,2px)}}
+@keyframes fxorbit{from{transform:rotate(0deg) translateX(20px) rotate(0deg)}to{transform:rotate(360deg) translateX(20px) rotate(-360deg)}}
+@keyframes fxtwinkle{0%,100%{transform:scale(.85) rotate(0deg);opacity:.5}50%{transform:scale(1.15) rotate(12deg);opacity:1}}
+@keyframes fxtwkop{0%,100%{opacity:.5}50%{opacity:1}}`;
 document.head.appendChild(css);
 
 const sub=(a,b)=>({x:a.x-b.x,y:a.y-b.y,z:a.z-b.z});
@@ -101,7 +116,9 @@ function touch(p){
   d.dataset.rot=p.r||0;
   d.style.setProperty('--rot',(p.r||0)+'deg');d.style.setProperty('--op',(p.o||100)/100);
   const plane=p.m==='p';
-  d.firstChild.className='fxa'+(p.an==='flash'||(!plane&&p.an&&p.an!=='none')?' an-'+p.an:'');
+  let cls='';
+  if(p.an&&p.an!=='none')cls=plane?({flash:'an-flash',fade:'an-fade',twinkle:'an-twkop'})[p.an]||'':'an-'+p.an;
+  d.firstChild.className='fxa'+(cls?' '+cls:'');
   d.classList.toggle('sel',p.id===C.sel);
   const z=zOf(p),lay=z<0?C.back:C.front;
   d.style.zIndex=z+10;
@@ -168,13 +185,21 @@ function loop(){
     if(p.id===C.sel&&zOf(p)<0)hs=[ctr.x,ctr.y];
     if(p.m==='p'){
       const asp=(im.naturalWidth&&im.naturalHeight)?im.naturalHeight/im.naturalWidth:1;
-      const ww=p.w*(2*T0*U/800);let hw=ww/2,hh=hw*asp,cy=p.y*sc,ry=p.ry||0;
-      if(p.an==='float')cy+=Math.sin(T*2*Math.PI/2.4)*ww*0.08;
-      if(p.an==='pulse'){const k=1+0.09*(1-Math.cos(T*2*Math.PI/1.4));hw*=k;hh*=k}
-      if(p.an==='spin')ry+=(T*90)%360;
-      const R=ry*Math.PI/180,ax0={x:Math.cos(R),z:-Math.sin(R)},rr=(p.r||0)*Math.PI/180,ca=Math.cos(rr),sa=Math.sin(rr);
+      const ww=p.w*(2*T0*U/800);let hw=ww/2,hh=hw*asp,ry=p.ry||0,rollDeg=p.r||0,k=1,dx=0,dy=0;
+      const A=p.an,tau=2*Math.PI;
+      if(A==='float')dy=Math.sin(T*tau/2.4)*ww*0.08;
+      else if(A==='pulse')k=1+0.09*(1-Math.cos(T*tau/1.4));
+      else if(A==='spin')ry+=(T*90)%360;
+      else if(A==='sway')rollDeg+=Math.sin(T*tau/2)*12;
+      else if(A==='bounce')dy=Math.abs(Math.sin(Math.PI*T/1.1))*ww*0.2;
+      else if(A==='heartbeat'){const u=(T%1.3)/1.3,g=cc=>Math.exp(-((u-cc)*(u-cc))/(2*0.03*0.03));k=1+0.22*Math.max(g(0.1),0.75*g(0.3))}
+      else if(A==='shake'){dx=(Math.sin(T*60)+Math.sin(T*47))*0.5*ww*0.03;dy=(Math.sin(T*53)+Math.sin(T*41))*0.5*ww*0.03}
+      else if(A==='orbit'){const ph=T*tau/3.5;dx=Math.cos(ph)*ww*0.15;dy=Math.sin(ph)*ww*0.15}
+      else if(A==='twinkle'){k=1+0.15*Math.sin(T*tau/1.6);rollDeg+=Math.sin(T*tau/1.6)*12}
+      hw*=k;hh*=k;
+      const R=ry*Math.PI/180,ax0={x:Math.cos(R),z:-Math.sin(R)},rr=rollDeg*Math.PI/180,ca=Math.cos(rr),sa=Math.sin(rr);
       const ax={x:ax0.x*ca,y:sa,z:ax0.z*ca},ay={x:-ax0.x*sa,y:ca,z:-ax0.z*sa};
-      const cx=p.x*sc,cz=p.z*sc;
+      const cx=p.x*sc+ax.x*dx+ay.x*dy,cy=p.y*sc+ax.y*dx+ay.y*dy,cz=p.z*sc+ax.z*dx+ay.z*dy;
       const cs=[[-1,1],[1,1],[1,-1],[-1,-1]].map(([sx,sy])=>FX.project(c,{x:cx+ax.x*hw*sx+ay.x*hh*sy,y:cy+ax.y*hw*sx+ay.y*hh*sy,z:cz+ax.z*hw*sx+ay.z*hh*sy}));
       if(cs.some(q=>!(q.zc>0.001))){d.style.display='none';return}
       const quad=cs.map(q=>[q.x,q.y]);

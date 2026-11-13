@@ -149,7 +149,7 @@ $('op').onclick=()=>window.open(viewLink(),'_blank');
 
 /* ---- 特效圖片 ---- */
 let sel=null;
-const ANL={none:'無',flash:'閃爍',float:'上下浮動',pulse:'脈動',spin:'旋轉'};
+const ANL={none:'無',flash:'閃爍',fade:'淡入淡出',twinkle:'閃亮',float:'上下浮動',bounce:'彈跳',pulse:'脈動',heartbeat:'心跳',sway:'左右搖擺',shake:'震動',orbit:'環繞',spin:'旋轉'};
 $('fa').innerHTML=Object.entries(ANL).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
 FX.init(mv,$('lb'),$('lf'),{edit:true,getScale:()=>st.s/100,onSelect:id=>{sel=id;FX.select(id);drawSps()}});
 const fxUrl=s=>pub('fx/'+s.f),cs=()=>st.sp.find(s=>s.id===sel);
