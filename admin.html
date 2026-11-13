@@ -78,6 +78,8 @@ const newSt=()=>({...DEF,sp:[]});let st=newSt(),cur=null,pending=null,localUrl=n
 const fmt=n=>n>=1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB';
 const mv=$('mv');
 mv.addEventListener('dblclick',e=>{e.preventDefault();e.stopPropagation()},true);
+function resetCam(){try{mv.fieldOfView='auto';mv.cameraOrbit='auto auto auto';mv.cameraTarget='auto auto auto';if(mv.jumpCameraToGoal)mv.jumpCameraToGoal()}catch(e){}}
+mv.addEventListener('load',resetCam);
 
 sb.auth.getSession().then(({data})=>{if(!data.session)location.replace('index.html');else{loadList();loadLib()}});
 $('out').onclick=async()=>{await sb.auth.signOut();location.replace('index.html')};
@@ -111,7 +113,7 @@ $('file').onchange=()=>{
   if(f.size>50*1024*1024){$('fname').textContent='檔案太大(上限 50 MB,建議 15 MB 內)';return}
   pending=f;cur=null;st=newSt();setUI();$('file').value='';
   if(localUrl)URL.revokeObjectURL(localUrl);localUrl=URL.createObjectURL(f);
-  mv.src=localUrl;sel=null;renderFx();drawSps();mv.style.display='block';$('drop').style.display='none';
+  resetCam();mv.src=localUrl;sel=null;renderFx();drawSps();mv.style.display='block';$('drop').style.display='none';
   $('fname').textContent=f.name+'('+fmt(f.size)+',未儲存)';$('save').disabled=false;$('qrw').style.display='none';sync();
 };
 
@@ -218,7 +220,7 @@ async function loadList(){
 async function edit(key){
   pending=null;cur=key;st=newSt();
   try{const r=await fetch(pub(key+'.json')+'?t='+Date.now());if(r.ok)st={...newSt(),...await r.json()}}catch(e){}
-  if(!Array.isArray(st.sp))st.sp=[];sel=null;setUI();mv.src=pub(key);renderFx();drawSps();mv.style.display='block';$('drop').style.display='none';
+  if(!Array.isArray(st.sp))st.sp=[];sel=null;setUI();resetCam();mv.src=pub(key);renderFx();drawSps();mv.style.display='block';$('drop').style.display='none';
   $('fname').textContent=key.replace(/^[a-z0-9]{1,6}-/,'')+(sizes[key]?'('+fmt(sizes[key])+')':'');$('save').disabled=false;sync();drawQR();window.scrollTo(0,0);
 }
 async function del(key){

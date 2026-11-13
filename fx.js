@@ -48,7 +48,7 @@ const FX=window.FX={
       const iv=setInterval(()=>{
         const r=mv.getCameraOrbit().radius;tries++;
         ok=Math.abs(r-last)<1e-4?ok+1:0;last=r;
-        if(ok>=2||tries>25){C.r0=r;C.tf0=Math.tan(mv.getFieldOfView()*Math.PI/360);clearInterval(iv)}
+        if(ok>=2||tries>25){C.r0=r;if(!C.tf0)C.tf0=Math.tan(mv.getFieldOfView()*Math.PI/360);clearInterval(iv)}
       },120);
     });
     requestAnimationFrame(loop);
