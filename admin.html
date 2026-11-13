@@ -5,7 +5,8 @@
 header{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid var(--bd);font-weight:700}
 main{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(300px,1fr);gap:16px;padding:16px;max-width:1100px;margin:0 auto}
 @media(max-width:800px){main{grid-template-columns:1fr}main>section{display:contents!important}.mvcard{position:sticky;top:0;z-index:20}.mvcard model-viewer{height:38vh;min-height:220px}.listcard{order:10}}
-#stage{position:relative;border-radius:10px;overflow:hidden}
+#stage{position:relative;border-radius:10px;overflow:hidden;isolation:isolate}
+#stage model-viewer{position:relative;z-index:2}#lb{z-index:1}#lf{z-index:3}
 model-viewer{width:100%;height:50vh;min-height:300px;display:none;background:transparent}
 #drop{border:2px dashed var(--bd);border-radius:12px;padding:34px 16px;text-align:center;color:var(--mut);cursor:pointer}
 .row{display:flex;align-items:center;gap:10px;margin:8px 0}.row label{width:90px;flex:none;color:var(--mut);font-size:13px}
