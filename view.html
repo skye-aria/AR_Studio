@@ -57,13 +57,23 @@ mv.addEventListener('error',()=>{$('msg').textContent='模型載入失敗'});
 mv.addEventListener('ar-status',e=>{
   const s=e.detail&&e.detail.status,on=(s==='session-started'||s==='object-placed');
   FX.pause(on);$('lb').style.display=$('lf').style.display=on?'none':'';
+  if(s==='not-presenting'||s==='failed')apply();
 });
 $('ar2').onclick=async()=>{
   mv.arModes='scene-viewer';
   try{await mv.activateAR()}catch(e){}
   mv.arModes='webxr scene-viewer quick-look';
 };
-$('ar').onclick=()=>{mv.activateAR();$('msg').textContent='請慢慢移動手機掃描地面,出現圓點後點擊放置';setTimeout(()=>{$('msg').textContent=''},6000)};
+async function prepAR(){
+  try{
+    mv.setAttribute('scale','1 1 1');await mv.updateComplete;
+    const d=mv.getDimensions();if(!d||!(d.y>0)){apply();return}
+    let target=st.ah>0?st.ah/100:((d.y<0.03||d.y>3)?0.3:0);
+    if(target>0){const k=target/d.y;mv.setAttribute('scale',`${k} ${k} ${k}`);await mv.updateComplete}
+    else apply();
+  }catch(e){apply()}
+}
+$('ar').onclick=async()=>{await prepAR();mv.activateAR();$('msg').textContent='請慢慢移動手機掃描地面,出現圓點後點擊放置';setTimeout(()=>{$('msg').textContent=''},6000)};
 
 $('cam').onclick=async()=>{
   try{
