@@ -23,6 +23,7 @@ model-viewer{position:fixed;inset:0;width:100%;height:100%;z-index:2;--poster-co
 <div class="bar">
   <button id="cam">鏡頭拍照模式</button>
   <button id="ar" class="alt">AR 地面擺放</button>
+  <button id="ar2" class="alt" style="display:none;font-size:12px;padding:8px 14px">改用 Google AR</button>
   <button id="snap" style="display:none">📸 拍照</button>
   <button id="stop" class="alt" style="display:none">關閉鏡頭</button>
 </div>
@@ -51,21 +52,30 @@ function apply(){
   try{const r=await fetch(pub(key+'.json')+'?t='+Date.now());if(r.ok)st={...st,...await r.json()}}catch(e){}
   apply();FX.init(mv,$('lb'),$('lf'),{getScale:()=>st.s/100});FX.set(st.sp||[],s=>pub('fx/'+s.f));mv.src=pub(key);
 })();
-mv.addEventListener('load',()=>{$('msg').textContent='';if(!mv.canActivateAR)$('ar').style.display='none'});
+mv.addEventListener('load',()=>{$('msg').textContent='';if(!mv.canActivateAR)$('ar').style.display='none';$('ar2').style.display=(mv.canActivateAR&&/Android/i.test(navigator.userAgent))?'inline-block':'none'});
 mv.addEventListener('error',()=>{$('msg').textContent='模型載入失敗'});
+mv.addEventListener('ar-status',e=>{
+  const s=e.detail&&e.detail.status,on=(s==='session-started'||s==='object-placed');
+  FX.pause(on);$('lb').style.display=$('lf').style.display=on?'none':'';
+});
+$('ar2').onclick=async()=>{
+  mv.arModes='scene-viewer';
+  try{await mv.activateAR()}catch(e){}
+  mv.arModes='webxr scene-viewer quick-look';
+};
 $('ar').onclick=()=>{mv.activateAR();$('msg').textContent='請慢慢移動手機掃描地面,出現圓點後點擊放置';setTimeout(()=>{$('msg').textContent=''},6000)};
 
 $('cam').onclick=async()=>{
   try{
     stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
     $('vid').srcObject=stream;$('vid').style.display='block';apply();$('zs').value=30;{const r=FX.r0();if(r){mv.maxCameraOrbit=`Infinity 180deg ${r*20}m`;mv.minCameraOrbit=`-Infinity 0deg ${r*0.3}m`;zoomTo(r*100/30)}}
-    $('cam').style.display=$('ar').style.display='none';$('snap').style.display=$('stop').style.display='inline-block';$('sz').style.display='flex';
+    $('cam').style.display=$('ar').style.display=$('ar2').style.display='none';$('snap').style.display=$('stop').style.display='inline-block';$('sz').style.display='flex';
     $('msg').textContent='用下方滑桿調整大小,拖動可旋轉,再按拍照';
   }catch(e){$('msg').textContent='未能開啟鏡頭,請允許鏡頭權限(需用 https 開啟)'}
 };
 function stopCam(){
   if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;$('vid').style.display='none';apply();mv.maxCameraOrbit='Infinity 180deg auto';mv.minCameraOrbit='-Infinity 0deg auto';if(FX.r0())zoomTo(FX.r0());
-  $('cam').style.display='inline-block';$('ar').style.display=mv.canActivateAR?'inline-block':'none';
+  $('cam').style.display='inline-block';$('ar').style.display=mv.canActivateAR?'inline-block':'none';$('ar2').style.display=(mv.canActivateAR&&/Android/i.test(navigator.userAgent))?'inline-block':'none';
   $('snap').style.display=$('stop').style.display='none';$('sz').style.display='none';$('msg').textContent='';
 }
 $('stop').onclick=stopCam;

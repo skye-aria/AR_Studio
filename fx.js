@@ -85,6 +85,7 @@ const FX=window.FX={
     if(C.handle)C.front.appendChild(C.handle);
     C.list.forEach(build);
   },
+  pause(b){if(C)C.paused=!!b},
   select(id){C.sel=id;C.list.forEach(touch)},
   touch(p){touch(p)}
 };
@@ -169,6 +170,7 @@ FX.drawPlane=function(g,im,H,wi,hi,dpr,n){
 
 function loop(){
   requestAnimationFrame(loop);
+  if(C.paused)return;
   const mv=C.mv;
   if(!C.list.length||mv.style.display==='none'||!mv.getCameraOrbit)return;
   const W=mv.clientWidth,H=mv.clientHeight;if(!W||!H)return;
