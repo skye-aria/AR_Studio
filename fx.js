@@ -78,25 +78,92 @@ function touch(p){
   const d=C.els[p.id];if(!d)return;
   d.dataset.rot=p.r||0;
   d.style.setProperty('--rot',(p.r||0)+'deg');d.style.setProperty('--op',(p.o||100)/100);
-  d.firstChild.className='fxa'+(p.an&&p.an!=='none'?' an-'+p.an:'');
+  const plane=p.m==='p';
+  d.firstChild.className='fxa'+(p.an==='flash'||(!plane&&p.an&&p.an!=='none')?' an-'+p.an:'');
   d.classList.toggle('sel',p.id===C.sel);
   const lay=(p.l==='b'&&p.id!==C.sel)?C.back:C.front;
   if(d.parentNode!==lay&&!d._drag)lay.appendChild(d);
 }
+// 4 點對應 → 透視變換係數
+function homog(src,dst){
+  const A=[],b=[];
+  for(let i=0;i<4;i++){
+    const x=src[i][0],y=src[i][1],X=dst[i][0],Y=dst[i][1];
+    A.push([x,y,1,0,0,0,-x*X,-y*X]);b.push(X);
+    A.push([0,0,0,x,y,1,-x*Y,-y*Y]);b.push(Y);
+  }
+  const n=8;
+  for(let i=0;i<n;i++){
+    let m=i;for(let r=i+1;r<n;r++)if(Math.abs(A[r][i])>Math.abs(A[m][i]))m=r;
+    [A[i],A[m]]=[A[m],A[i]];[b[i],b[m]]=[b[m],b[i]];
+    const pv=A[i][i];if(Math.abs(pv)<1e-12)return null;
+    for(let r=i+1;r<n;r++){const k=A[r][i]/pv;for(let j=i;j<n;j++)A[r][j]-=k*A[i][j];b[r]-=k*b[i]}
+  }
+  const h=new Array(n);
+  for(let i=n-1;i>=0;i--){let s=b[i];for(let j=i+1;j<n;j++)s-=A[i][j]*h[j];h[i]=s/A[i][i]}
+  return h;
+}
+FX.homog=homog;
+// 拍照用:把圖片以透視變形畫到 canvas(分格三角形近似)
+FX.drawPlane=function(g,im,H,wi,hi,dpr,n){
+  n=n||8;
+  const map=(x,y)=>{const w=H[6]*x+H[7]*y+1;return[(H[0]*x+H[1]*y+H[2])/w*dpr,(H[3]*x+H[4]*y+H[5])/w*dpr]};
+  const sw=im.naturalWidth,sh=im.naturalHeight;
+  const tri=(a,b,c)=>{
+    const s=[a,b,c].map(q=>[q[0]*sw,q[1]*sh]),d=[a,b,c].map(q=>map(q[0]*wi,q[1]*hi));
+    const x0=s[0][0],y0=s[0][1],x1=s[1][0],y1=s[1][1],x2=s[2][0],y2=s[2][1];
+    const u0=d[0][0],v0=d[0][1],u1=d[1][0],v1=d[1][1],u2=d[2][0],v2=d[2][1];
+    const det=x0*(y1-y2)+x1*(y2-y0)+x2*(y0-y1);if(!det)return;
+    const A=(u0*(y1-y2)+u1*(y2-y0)+u2*(y0-y1))/det,Cc=(x0*(u1-u2)+x1*(u2-u0)+x2*(u0-u1))/det,E=(x0*(y1*u2-y2*u1)+x1*(y2*u0-y0*u2)+x2*(y0*u1-y1*u0))/det;
+    const B=(v0*(y1-y2)+v1*(y2-y0)+v2*(y0-y1))/det,D=(x0*(v1-v2)+x1*(v2-v0)+x2*(v0-v1))/det,F=(x0*(y1*v2-y2*v1)+x1*(y2*v0-y0*v2)+x2*(y0*v1-y1*v0))/det;
+    const cx=(u0+u1+u2)/3,cy=(v0+v1+v2)/3,ex=p=>{const dx=p[0]-cx,dy=p[1]-cy,l=Math.hypot(dx,dy)||1;return[p[0]+dx/l*0.7,p[1]+dy/l*0.7]};
+    const e=d.map(ex);
+    g.save();g.beginPath();g.moveTo(e[0][0],e[0][1]);g.lineTo(e[1][0],e[1][1]);g.lineTo(e[2][0],e[2][1]);g.closePath();g.clip();
+    g.setTransform(A,B,Cc,D,E,F);g.drawImage(im,0,0);g.restore();
+  };
+  for(let i=0;i<n;i++)for(let j=0;j<n;j++){
+    const a=i/n,b=(i+1)/n,c=j/n,e=(j+1)/n;
+    tri([a,c],[b,c],[b,e]);tri([a,c],[b,e],[a,e]);
+  }
+};
+
 function loop(){
   requestAnimationFrame(loop);
   const mv=C.mv;
   if(!C.list.length||mv.style.display==='none'||!mv.getCameraOrbit)return;
   const W=mv.clientWidth,H=mv.clientHeight;if(!W||!H)return;
   const o=mv.getCameraOrbit(),t=mv.getCameraTarget(),fov=mv.getFieldOfView();
-  const c=C.cam=FX.cam(o,t,fov,W,H),sc=C.o.getScale?C.o.getScale():1,r0=C.r0||o.radius;
+  const c=C.cam=FX.cam(o,t,fov,W,H),sc=C.o.getScale?C.o.getScale():1,r0=C.r0||o.radius,T=performance.now()/1000;
   C.list.forEach(p=>{
     const d=C.els[p.id];if(!d)return;
-    const q=FX.project(c,{x:p.x*sc,y:p.y*sc,z:p.z*sc});
-    if(!(q.zc>0.001)){d.style.display='none';return}
-    d.style.display='';d._zc=q.zc;
-    d.style.transform='translate('+q.x.toFixed(1)+'px,'+q.y.toFixed(1)+'px)';
-    d.querySelector('img').style.width=(p.w*r0/q.zc).toFixed(1)+'px';
+    const im=d.querySelector('img'),ctr=FX.project(c,{x:p.x*sc,y:p.y*sc,z:p.z*sc});
+    if(!(ctr.zc>0.001)){d.style.display='none';return}
+    d._zc=ctr.zc;
+    if(p.m==='p'){
+      const asp=(im.naturalWidth&&im.naturalHeight)?im.naturalHeight/im.naturalWidth:1;
+      const ww=p.w*(2*c.tf*r0/800);let hw=ww/2,hh=hw*asp,cy=p.y*sc,ry=p.ry||0;
+      if(p.an==='float')cy+=Math.sin(T*2*Math.PI/2.4)*ww*0.08;
+      if(p.an==='pulse'){const k=1+0.09*(1-Math.cos(T*2*Math.PI/1.4));hw*=k;hh*=k}
+      if(p.an==='spin')ry+=(T*90)%360;
+      const R=ry*Math.PI/180,ax0={x:Math.cos(R),z:-Math.sin(R)},rr=(p.r||0)*Math.PI/180,ca=Math.cos(rr),sa=Math.sin(rr);
+      const ax={x:ax0.x*ca,y:sa,z:ax0.z*ca},ay={x:-ax0.x*sa,y:ca,z:-ax0.z*sa};
+      const cx=p.x*sc,cz=p.z*sc;
+      const cs=[[-1,1],[1,1],[1,-1],[-1,-1]].map(([sx,sy])=>FX.project(c,{x:cx+ax.x*hw*sx+ay.x*hh*sy,y:cy+ax.y*hw*sx+ay.y*hh*sy,z:cz+ax.z*hw*sx+ay.z*hh*sy}));
+      if(cs.some(q=>!(q.zc>0.001))){d.style.display='none';return}
+      const quad=cs.map(q=>[q.x,q.y]);
+      let area=0;for(let i=0;i<4;i++){const a=quad[i],b=quad[(i+1)%4];area+=a[0]*b[1]-b[0]*a[1]}
+      const wi=100,hi=100*asp,Hm=Math.abs(area)>4?homog([[0,0],[wi,0],[wi,hi],[0,hi]],quad):null;
+      if(!Hm){d.style.display='none';return}
+      d.style.display='';d.style.transform='none';
+      im.style.width=wi+'px';im.style.height=hi+'px';im.style.transformOrigin='0 0';
+      im.style.transform='matrix3d('+[Hm[0],Hm[3],0,Hm[6],Hm[1],Hm[4],0,Hm[7],0,0,1,0,Hm[2],Hm[5],0,1].join(',')+')';
+      d._plane=true;d._H=Hm;d._wi=wi;d._hi=hi;
+    }else{
+      if(d._plane){d._plane=false;im.style.height='';im.style.transform='';im.style.transformOrigin=''}
+      d.style.display='';
+      d.style.transform='translate('+ctr.x.toFixed(1)+'px,'+ctr.y.toFixed(1)+'px)';
+      im.style.width=(p.w*(H/800)*r0/ctr.zc).toFixed(1)+'px';
+    }
   });
 }
 })();

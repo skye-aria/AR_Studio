@@ -79,7 +79,12 @@ $('snap').onclick=async()=>{
   const vw=v.videoWidth,vh=v.videoHeight,k=Math.max(W/vw,H/vh),dw=vw*k,dh=vh*k;
   g.drawImage(v,(W-dw)/2,(H-dh)/2,dw,dh);
   const drawLayer=lay=>lay.querySelectorAll('.fxi').forEach(d=>{try{
-    const im=d.querySelector('img'),sp=d.querySelector('.fxa'),r=im.getBoundingClientRect();if(!r.width||!im.naturalWidth)return;
+    const im=d.querySelector('img'),sp=d.querySelector('.fxa');
+    if(d._plane&&d._H&&d.style.display!=='none'&&im.naturalWidth){
+      g.save();g.globalAlpha=(+getComputedStyle(im).opacity)*(+getComputedStyle(sp).opacity);
+      FX.drawPlane(g,im,d._H,d._wi,d._hi,dpr);g.restore();return;
+    }
+    const r=im.getBoundingClientRect();if(!r.width||!im.naturalWidth)return;
     const cs=getComputedStyle(sp),m=new DOMMatrix(cs.transform==='none'?undefined:cs.transform),sc=Math.hypot(m.a,m.b);
     const w=im.offsetWidth*dpr*sc,h=im.offsetHeight*dpr*sc;
     g.save();g.globalAlpha=(+getComputedStyle(im).opacity)*(+cs.opacity);
