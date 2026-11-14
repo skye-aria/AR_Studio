@@ -41,6 +41,8 @@ model-viewer{width:100%;height:50vh;min-height:300px;display:none;background:tra
   <div class="row"><label>AR 固定尺寸</label><input type="checkbox" id="p"></div>
   <div class="row"><label>AR 高度(cm)</label><input type="number" id="ah" min="1" max="500" placeholder="自動" style="flex:1;min-width:0;padding:8px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--tx)"></div>
   <div class="msg" id="dim" style="margin:0"></div>
+  <div class="row" id="amrow" style="display:none"><label>動作</label><select id="am" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--tx)"></select></div>
+  <div class="row" id="acrow" style="display:none"><label>客戶切換動作</label><input type="checkbox" id="ac"><span class="msg" style="margin:0">勾選後,客戶頁可自行選擇動作</span></div>
  </div>
  <div class="card"><b>特效圖片</b> <span class="msg">PNG / GIF / WebP</span>
   <div style="margin-top:6px"><button id="fxup">上載圖片</button><input type="file" id="fxfile" accept="image/*" hidden></div>
@@ -77,7 +79,7 @@ const $=id=>document.getElementById(id);
 const sb=supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_KEY), B=CFG.BUCKET;
 const pub=k=>`${CFG.SUPABASE_URL}/storage/v1/object/public/${B}/${k}`;
 const BGS=['#f4f4f2','#16181d','#dbe7ff','#ffe6d2','#d9f2e3'];
-const DEF={s:100,r:0,e:10,h:10,a:0,b:0,p:0,ah:0};
+const DEF={s:100,r:0,e:10,h:10,a:0,b:0,p:0,ah:0,am:'',ac:0};
 const newSt=()=>({...DEF,sp:[]});let st=newSt(),cur=null,pending=null,localUrl=null,sizes={};
 const fmt=n=>n>=1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB';
 const mv=$('mv');
@@ -91,6 +93,25 @@ $('out').onclick=async()=>{await sb.auth.signOut();location.replace('index.html'
 BGS.forEach((c,i)=>{const b=document.createElement('button');b.className='sw';b.style.background=c;b.onclick=()=>{st.b=i;sync()};$('bgs').appendChild(b)});
 ['s','r','e','h'].forEach(k=>$(k).oninput=()=>{st[k]=+$(k).value;sync()});
 $('ah').oninput=()=>{st.ah=+$('ah').value||0};
+function applyAnim(){
+  if(!mv.src)return;
+  try{
+    if(st.am){mv.animationName=st.am;mv.play()}
+    else{mv.pause();mv.currentTime=0}
+  }catch(e){}
+}
+function populateAnim(){
+  const L=mv.availableAnimations||[],sel=$('am');
+  $('amrow').style.display=$('acrow').style.display=L.length?'flex':'none';
+  sel.innerHTML='';
+  const o0=document.createElement('option');o0.value='';o0.textContent='不播放(靜止)';sel.appendChild(o0);
+  L.forEach(n=>{const o=document.createElement('option');o.value=n;o.textContent=n;sel.appendChild(o)});
+  if(!L.includes(st.am))st.am='';
+  sel.value=st.am;applyAnim();
+}
+$('am').onchange=()=>{st.am=$('am').value;applyAnim()};
+$('ac').onchange=()=>{st.ac=$('ac').checked?1:0};
+mv.addEventListener('load',populateAnim);
 async function showDim(){
   if(!mv.src)return;
   try{
@@ -105,7 +126,7 @@ async function showDim(){
 mv.addEventListener('load',()=>setTimeout(showDim,300));
 $('a').onchange=()=>{st.a=$('a').checked?1:0;sync()};
 $('p').onchange=()=>{st.p=$('p').checked?1:0;sync()};
-function setUI(){$('ah').value=st.ah||'';['s','r','e','h'].forEach(k=>$(k).value=st[k]);$('a').checked=!!st.a;$('p').checked=!!st.p}
+function setUI(){$('ac').checked=!!st.ac;$('ah').value=st.ah||'';['s','r','e','h'].forEach(k=>$(k).value=st[k]);$('a').checked=!!st.a;$('p').checked=!!st.p}
 function sync(){
   $('so').textContent=st.s+'%';$('ro').textContent=st.r+'°';$('eo').textContent=(st.e/10).toFixed(1);$('ho').textContent=(st.h/10).toFixed(1);
   [...$('bgs').children].forEach((b,i)=>b.classList.toggle('on',i===st.b));
